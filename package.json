@@ -1,0 +1,12 @@
+{
+  "name": "wint-demo",
+  "private": true,
+  "description": "Browser demo for wint, the environmental operability window engine",
+  "scripts": {
+    "serve": "python3 -m http.server 8765",
+    "test": "node tests/e2e.mjs http://localhost:8765/"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}

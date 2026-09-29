@@ -1,0 +1,53 @@
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --text: #1c2430; --muted: #5b6675; --line: #d9dee6;
+  --accent: #1b6ef3; --accent-text: #ffffff; --ok: 28 140 84; --bad: #c5cbd4; --warn: #b3261e;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #12161c; --panel: #1a2029; --text: #e8ecf2; --muted: #9aa5b5; --line: #2c3542;
+          --accent: #5b9bff; --accent-text: #08101d; --ok: 74 200 130; --bad: #303947; --warn: #ff8a80; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+header, main, footer { max-width: 60rem; margin: 0 auto; padding: 0 16px; }
+header { padding-top: 28px; }
+h1 { margin: 0; font-size: 1.8rem; } h1 span { color: var(--muted); font-weight: 400; }
+h2 { font-size: 1.15rem; margin: 0 0 12px; } h3 { font-size: 1rem; margin: 22px 0 6px; }
+header p { color: var(--muted); max-width: 46rem; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin: 16px 0; }
+details.panel > summary { font-weight: 600; cursor: pointer; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr)); gap: 12px; }
+.wide { grid-column: 1 / -1; }
+label { display: flex; flex-direction: column; gap: 4px; font-size: .85rem; color: var(--muted); }
+input, select, textarea, button { font: inherit; color: var(--text); }
+input, select, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; min-width: 0; }
+textarea { width: 100%; font: .82rem/1.4 ui-monospace, SFMono-Regular, Menlo, monospace; margin-top: 8px; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; } .row input { flex: 1; }
+.actions { margin-top: 12px; }
+button, label.file { background: var(--accent); color: var(--accent-text); border: 0; border-radius: 6px; padding: 9px 14px; cursor: pointer; font-weight: 600; font-size: .95rem; }
+button.secondary, label.file.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+label.file { flex-direction: row; } label.file input { display: none; }
+button:disabled { opacity: .55; cursor: progress; }
+:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.hint { color: var(--muted); font-size: .88rem; margin: 6px 0; }
+#status { min-height: 1.5em; margin: 10px 0 0; } #status.error { color: var(--warn); }
+.results-list { display: flex; flex-direction: column; border: 1px solid var(--line); border-radius: 6px; }
+.results-list button { text-align: left; background: transparent; color: var(--text); border: 0; border-bottom: 1px solid var(--line); border-radius: 0; font-weight: 400; }
+.results-list button:last-child { border-bottom: 0; }
+.strip { display: flex; flex-wrap: wrap; gap: 3px; margin: 8px 0; }
+.cell { width: 22px; height: 30px; border-radius: 4px; border: 2px solid transparent; padding: 0; background: var(--bad); }
+.cell.ok { background: rgb(var(--ok) / var(--a, 1)); }
+.cell[aria-pressed="true"] { border-color: var(--text); }
+.day { flex-basis: 100%; font-size: .78rem; color: var(--muted); margin-top: 6px; }
+.detail { background: var(--bg); border-radius: 8px; padding: 10px 12px; margin: 8px 0; min-height: 2.5em; font-size: .92rem; }
+.detail:empty { display: none; }
+.best { padding: 0; list-style: none; display: grid; gap: 10px; }
+.best li { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; }
+.best .when { font-weight: 600; } .best .score { color: var(--muted); font-size: .88rem; }
+.bar { height: 6px; background: var(--bad); border-radius: 3px; margin: 6px 0; overflow: hidden; } .bar > i { display: block; height: 100%; background: rgb(var(--ok)); }
+table.ev { width: 100%; border-collapse: collapse; font-size: .85rem; margin-top: 6px; } table.ev td, table.ev th { text-align: left; padding: 2px 8px 2px 0; vertical-align: top; }
+table.ev th { color: var(--muted); font-weight: 500; }
+.units ul { columns: 2; font-size: .85rem; color: var(--muted); } .units summary { cursor: pointer; margin-top: 8px; font-size: .9rem; }
+footer { color: var(--muted); font-size: .85rem; padding-bottom: 32px; }
+a { color: var(--accent); }
+@media (max-width: 480px) { .units ul { columns: 1; } .cell { width: 18px; } }

@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>wint demo</title>
+  <meta name="description" content="Find the time windows when an operation fits your weather limits. Runs entirely in your browser.">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>wint <span>demo</span></h1>
+    <p>When can you do it, for how long, and why? Pick a place and an activity; wint finds the time windows that stay inside your limits and shows its evidence. Everything runs in your browser.</p>
+  </header>
+
+  <main>
+    <section class="panel" aria-labelledby="setup-h">
+      <h2 id="setup-h">1. Where and what</h2>
+      <div class="grid">
+        <label class="wide">Place
+          <span class="row">
+            <input id="place" type="search" placeholder="e.g. Berlin" autocomplete="off">
+            <button id="search-place" type="button" class="secondary">Search</button>
+          </span>
+        </label>
+        <div id="place-results" class="wide results-list" hidden></div>
+        <label>Latitude <input id="lat" type="number" step="any" min="-90" max="90" value="52.52"></label>
+        <label>Longitude <input id="lon" type="number" step="any" min="-180" max="180" value="13.41"></label>
+        <label>Forecast days <input id="days" type="number" min="1" max="16" value="3"></label>
+        <label>Activity
+          <select id="preset"></select>
+        </label>
+        <label>Operation length (hours) <input id="hours" type="number" min="1" step="1" value="2"></label>
+        <label>Show times in
+          <select id="tz"><option value="local">my time zone</option><option value="utc">UTC</option></select>
+        </label>
+      </div>
+      <p id="preset-desc" class="hint"></p>
+      <div class="row actions">
+        <button id="run-live" type="button">Find windows (live forecast)</button>
+        <button id="run-sample" type="button" class="secondary">Use synthetic sample data</button>
+        <label class="file secondary">Upload CSV<input id="csv" type="file" accept=".csv,text/csv"></label>
+      </div>
+      <p id="status" role="status" aria-live="polite"></p>
+    </section>
+
+    <details class="panel" id="plan-panel">
+      <summary>2. The rules (editable plan)</summary>
+      <p class="hint">This is the plan the engine runs. Hard constraints must hold for every hour of the window; soft preferences only rank the windows that pass. Values are in the engine's standard units (see the units list below). Edit anything and run again.</p>
+      <textarea id="plan" spellcheck="false" rows="18" aria-label="Plan JSON"></textarea>
+      <details class="units"><summary>Standard units</summary><ul id="units"></ul></details>
+    </details>
+
+    <section class="panel" id="results" hidden aria-labelledby="res-h">
+      <h2 id="res-h">3. Answer</h2>
+      <p id="summary"></p>
+      <h3>Every possible start time</h3>
+      <p class="hint">Each cell is a start time. Green = the whole operation fits your limits (darker = better preference score). Grey = rejected. Click a cell for the evidence.</p>
+      <div id="strip" class="strip" role="list"></div>
+      <div id="detail" class="detail" aria-live="polite"></div>
+      <h3>Best windows</h3>
+      <ol id="best" class="best"></ol>
+    </section>
+  </main>
+
+  <footer>
+    <p><strong>Not safety guidance.</strong> Presets are illustrative starting points, scores are preferences (not probabilities), and forecasts are uncertain. Check limits against your equipment and local rules. Forecast data by <a href="https://open-meteo.com/">Open-Meteo</a> (non-commercial use, CC BY 4.0). Engine: <a href="https://github.com/aunai-org/wint">wint</a> <span id="ver"></span>.</p>
+  </footer>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
