@@ -16,17 +16,18 @@
   <main>
     <section class="panel" aria-labelledby="setup-h">
       <h2 id="setup-h">1. Where and what</h2>
+      <p id="embed-note" class="note" hidden>This copy runs in a sandbox that cannot reach forecast services, so it works on synthetic sample data or your own CSV. The <a href="https://github.com/aunai-org/wint-demo">standalone demo</a> adds live forecasts and place search.</p>
       <div class="grid">
-        <label class="wide">Place
+        <label class="wide" data-live>Place
           <span class="row">
             <input id="place" type="search" placeholder="e.g. Berlin" autocomplete="off">
             <button id="search-place" type="button" class="secondary">Search</button>
           </span>
         </label>
         <div id="place-results" class="wide results-list" hidden></div>
-        <label>Latitude <input id="lat" type="number" step="any" min="-90" max="90" value="52.52"></label>
-        <label>Longitude <input id="lon" type="number" step="any" min="-180" max="180" value="13.41"></label>
-        <label>Forecast days <input id="days" type="number" min="1" max="16" value="3"></label>
+        <label data-live>Latitude <input id="lat" type="number" step="any" min="-90" max="90" value="52.52"></label>
+        <label data-live>Longitude <input id="lon" type="number" step="any" min="-180" max="180" value="13.41"></label>
+        <label data-live>Forecast days <input id="days" type="number" min="1" max="16" value="3"></label>
         <label>Activity
           <select id="preset"></select>
         </label>
@@ -37,7 +38,7 @@
       </div>
       <p id="preset-desc" class="hint"></p>
       <div class="row actions">
-        <button id="run-live" type="button">Find windows (live forecast)</button>
+        <button id="run-live" type="button" data-live>Find windows (live forecast)</button>
         <button id="run-sample" type="button" class="secondary">Use synthetic sample data</button>
         <label class="file secondary">Upload CSV<input id="csv" type="file" accept=".csv,text/csv"></label>
       </div>

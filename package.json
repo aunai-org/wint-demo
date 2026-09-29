@@ -4,7 +4,9 @@
   "description": "Browser demo for wint, the environmental operability window engine",
   "scripts": {
     "serve": "python3 -m http.server 8765",
-    "test": "node tests/e2e.mjs http://localhost:8765/"
+    "test": "node tests/e2e.mjs http://localhost:8765/",
+    "build:single": "node scripts/build-single.mjs dist/wint-demo.html",
+    "test:single": "node scripts/build-single.mjs dist/wint-demo.html && node tests/single.mjs dist/wint-demo.html"
   },
   "devDependencies": {
     "playwright": "^1.56.0"

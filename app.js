@@ -72,7 +72,8 @@ async function loadLive() {
   seriesLabel = `live forecast for ${lat.toFixed(2)}, ${lon.toFixed(2)}`;
 }
 async function loadSample() {
-  const body = await fetchText('sample-forecast.json', 'the sample file');
+  // The single-file build inlines the sample; the standalone site fetches it.
+  const body = window.WINT_SAMPLE ?? await fetchText('sample-forecast.json', 'the sample file');
   series = wint.parseOpenMeteo(body);
   seriesLabel = 'synthetic sample data (not a real forecast)';
 }
@@ -203,8 +204,17 @@ function render(result) {
 
 // ---------- wiring ----------
 let presets = [];
+function embeddedWasm() {
+  // The single-file build inlines the engine as base64 (see scripts/build-single.mjs).
+  const b64 = window.WINT_WASM_B64;
+  return b64 ? { module_or_path: Uint8Array.from(atob(b64), (c) => c.charCodeAt(0)) } : undefined;
+}
 async function main() {
-  await init();
+  await init(embeddedWasm());
+  if (window.WINT_EMBED) {
+    document.querySelectorAll('[data-live]').forEach((node) => (node.hidden = true));
+    $('embed-note').hidden = false;
+  }
   $('ver').textContent = `v${wint.version()}`;
   presets = JSON.parse(wint.listPresets());
   for (const p of presets) $('preset').append(el('option', { value: p.name, textContent: p.name }));
