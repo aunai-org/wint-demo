@@ -32,8 +32,22 @@
           <select id="preset"></select>
         </label>
         <label>Operation length (hours) <input id="hours" type="number" min="1" step="1" value="2"></label>
+        <label>Time of day
+          <select id="tod">
+            <option value="any">Any time</option>
+            <option value="day">Daylight only</option>
+            <option value="night">Night only</option>
+            <option value="custom">Custom hours…</option>
+          </select>
+        </label>
+        <label id="tod-from-l" hidden>From (place's clock) <input id="tod-from" type="time" value="09:00"></label>
+        <label id="tod-to-l" hidden>Until <input id="tod-to" type="time" value="20:00"></label>
         <label>Show times in
-          <select id="tz"><option value="local">my time zone</option><option value="utc">UTC</option></select>
+          <select id="tz">
+            <option value="place">the place's local time</option>
+            <option value="local">my time zone</option>
+            <option value="utc">UTC</option>
+          </select>
         </label>
       </div>
       <p id="preset-desc" class="hint"></p>
@@ -58,6 +72,28 @@
       <h3>Every possible start time</h3>
       <p class="hint">Each cell is a start time. Green = the whole operation fits your limits (darker = better preference score). Grey = rejected. Click a cell for the evidence.</p>
       <div id="strip" class="strip" role="list"></div>
+      <h3>Scrub through time</h3>
+      <p class="hint">Drag the marker along the rail, or click the chart. The charts show each limited reading hour by hour against its limit. Marker color shows headroom: green is comfortably inside the limit, amber is close to it (within about 15% of the limit), red is past it.</p>
+      <div class="rail-buttons">
+        <button id="prev-fit" type="button" class="secondary small">◀ Previous fit</button>
+        <button id="play" type="button" class="secondary small" aria-pressed="false">▶ Play</button>
+        <button id="next-fit" type="button" class="secondary small">Next fit ▶</button>
+        <button id="best-btn" type="button" class="secondary small">Jump to best</button>
+      </div>
+      <div class="rail">
+        <div id="rail-cells" class="rail-cells" aria-hidden="true"></div>
+        <input id="rail" type="range" min="0" max="0" value="0" step="1" aria-label="Start time of the operation">
+      </div>
+      <div id="readout" class="readout" aria-live="polite"></div>
+      <div id="chart" class="chart"></div>
+      <div class="legend" aria-hidden="true">
+        <span><i class="dot m-ok"></i> comfortable headroom</span>
+        <span><i class="dot m-tight"></i> tight</span>
+        <span><i class="dot m-bad"></i> past a limit</span>
+        <span><i class="dot m-missing"></i> no reading</span>
+        <span><i class="swatch night"></i> night</span>
+        <span><i class="swatch band"></i> selected operation</span>
+      </div>
       <div id="detail" class="detail" aria-live="polite"></div>
       <h3>Best windows</h3>
       <ol id="best" class="best"></ol>

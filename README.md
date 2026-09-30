@@ -12,6 +12,12 @@ npm run serve        # then open http://localhost:8765
 
 (Any static file server works; the page must be served over http, not opened as a file, so the browser can load the `.wasm`.)
 
+What you can do with it:
+
+- **Scrub through time.** A rail under the start-time strip lets you drag (or use the arrow keys, Previous/Next fit, Jump to best, Play) through every possible start time. Charts below show each limited reading hour by hour against its limit, with the selected operation shaded and day/night banded.
+- **Headroom colors.** Each hourly marker is green (comfortably inside the limit), amber (within about 15% of the limit) or red (past it). This is headroom against the limits, *not* a confidence score: wint treats the forecast as exact, and forecast uncertainty is on the roadmap.
+- **Time of day.** Any time, daylight only, night only, or custom hours (including overnight such as 20:00 to 06:00), on the place's own clock. Times are shown in the place's local time by default, or your time zone, or UTC.
+
 Try **Use synthetic sample data** first: it needs no network. **Find windows (live forecast)** calls Open-Meteo from your browser; **Upload CSV** takes your own hourly data (see the [CSV format](https://github.com/aunai-org/wint/blob/main/src/adapters/csv.rs)).
 
 ## How it fits together
@@ -45,7 +51,7 @@ npm run serve &      # in another terminal, or in the background
 npm test             # drives the page in headless Chromium using the synthetic sample
 ```
 
-`npm test` covers loading, results, the evidence panels, plan editing, CSV upload, graceful network failures and the mobile layout, using the synthetic sample and mocked API errors. `npm run test:single` builds the single-file page and checks it under a strict no-network CSP (with WASM allowed), including the light/dark theme switch.
+`npm test` covers loading, results, the rail and chart (including a check that the chart's red markers agree with the engine's rejections), time-of-day modes, the place clock, plan editing, CSV upload, graceful network failures and the mobile layout, using the synthetic sample and mocked API errors. `npm run test:single` builds the single-file page and checks it under a strict no-network CSP (with WASM allowed), including the light/dark theme switch.
 
 ## Caveats
 
