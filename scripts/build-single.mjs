@@ -2,7 +2,7 @@
 // base64 WASM, the sample data as a string, and the live-forecast controls are hidden.
 //   node scripts/build-single.mjs <out.html> [--fragment]
 // --fragment omits <!doctype>/<html>/<head>/<body>, for hosts that supply their own page skeleton.
-import { readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -56,5 +56,6 @@ ${script}
 const doc = fragment
   ? content
   : `<!doctype html>\n<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="description" content="${description}">\n${content}</body></html>\n`;
+mkdirSync(dirname(out), { recursive: true }); // dist/ is git-ignored, so it is missing on a fresh clone
 writeFileSync(out, doc);
 console.log(`${out}: ${(doc.length / 1024).toFixed(0)} KB${fragment ? ' (fragment)' : ''}`);
