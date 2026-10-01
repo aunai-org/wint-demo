@@ -7,9 +7,15 @@ const el = (tag, props = {}, ...children) => {
   return node;
 };
 
-const state = { all: [], result: null, seriesObj: null, selected: 0, panelDefs: [], panels: [], geom: null, timer: null };
+const state = { mode: 'single', all: [], result: null, seriesObj: null, members: [], selected: 0, panelDefs: [], panels: [], geom: null, timer: null };
+const MODELS = 'ecmwf_ifs025,gfs_seamless,icon_seamless,meteofrance_seamless'; // multi-model comparison
+const ENSEMBLE_MODEL = 'icon_seamless'; // ensemble (about 40 members)
+const AGREE_TEXT = { 1: 'every forecast version that can answer', 0.8: 'at least 80% of the versions that can answer', 0.5: 'at least half of the versions that can answer' };
 let units = {};        // metric name -> canonical unit symbol
-let series = null;     // series JSON (string) currently loaded
+let series = null;     // single-forecast series JSON (string) currently loaded
+let ensembleJson = null; // ensemble JSON (string) when several forecast versions are loaded
+let dataKind = 'single'; // which of the two is current
+const hasData = () => (dataKind === 'ensemble' ? !!ensembleJson : !!series);
 let seriesLabel = '';  // where the data came from, for the summary
 
 // ---------- status / errors ----------
@@ -83,19 +89,43 @@ async function fetchText(url, what) {
 async function loadLive() {
   const lat = parseFloat($('lat').value), lon = parseFloat($('lon').value), days = parseInt($('days').value, 10);
   if (!(lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180)) throw new Error('Latitude must be within ±90 and longitude within ±180.');
+  const source = $('source').value;
+  const where = `${lat.toFixed(2)}, ${lon.toFixed(2)}`;
   status('Fetching forecast…');
-  const body = await fetchText(wint.openMeteoUrl(lat, lon, days), 'the forecast service');
-  series = wint.parseOpenMeteo(body);
-  seriesLabel = `live forecast for ${lat.toFixed(2)}, ${lon.toFixed(2)}`;
+  if (source === 'single') {
+    const body = await fetchText(wint.openMeteoUrl(lat, lon, days), 'the forecast service');
+    series = wint.parseOpenMeteo(body);
+    ensembleJson = null;
+    dataKind = 'single';
+    seriesLabel = `live forecast for ${where}`;
+  } else {
+    const url = source === 'models' ? wint.multiModelUrl(lat, lon, days, MODELS) : wint.ensembleUrl(lat, lon, days, ENSEMBLE_MODEL);
+    ensembleJson = wint.parseOpenMeteoEnsemble(await fetchText(url, 'the forecast service'));
+    series = null;
+    dataKind = 'ensemble';
+    seriesLabel = `live ${source === 'models' ? 'weather-model comparison' : 'ensemble'} for ${where}`;
+  }
 }
 async function loadSample() {
   // The single-file build inlines the sample; the standalone site fetches it.
   const body = window.WINT_SAMPLE ?? await fetchText('sample-forecast.json', 'the sample file');
   series = wint.parseOpenMeteo(body);
+  ensembleJson = null;
+  dataKind = 'single';
   seriesLabel = 'synthetic sample data (not a real forecast)';
+}
+async function loadRecorded() {
+  // A real multi-model forecast for Berlin, recorded on 1 Oct 2026, so agreement can be seen offline.
+  const body = window.WINT_SAMPLE_MULTI ?? await fetchText('sample-multi-model.json', 'the recorded forecast');
+  ensembleJson = wint.parseOpenMeteoEnsemble(body);
+  series = null;
+  dataKind = 'ensemble';
+  seriesLabel = 'a recorded real forecast for Berlin from 4 weather models (1 Oct 2026)';
 }
 async function loadCsv(file) {
   series = wint.parseCsv(await file.text());
+  ensembleJson = null;
+  dataKind = 'single';
   seriesLabel = `your CSV (${file.name})`;
 }
 
@@ -156,15 +186,44 @@ function retune() {
 }
 
 // ---------- run + render ----------
-function run() {
-  if (!series) throw new Error('Load some data first.');
-  state.seriesObj = JSON.parse(series);
+/** Shows the controls and wording that belong to the loaded kind of data. */
+function setModeUi() {
+  const ens = state.mode === 'ensemble';
+  $('agree-l').hidden = !ens;
+  document.querySelectorAll('[data-mode]').forEach((node) => (node.hidden = node.dataset.mode !== state.mode));
+  $('strip-hint').textContent = ens
+    ? 'Each cell is a start time. Green = the whole operation meets your agreement requirement; amber = it fits in some forecast versions but not enough; grey = it fits in none. Darker = more versions agree. Click a cell for each version\'s verdict.'
+    : 'Each cell is a start time. Green = the whole operation fits your limits (darker = better preference score). Grey = rejected. Click a cell for the evidence.';
+  $('scrub-hint').textContent = ens
+    ? 'Drag the marker along the rail, or click the chart. Each panel shows the spread between forecast versions hour by hour against the limit. A marker is green when every version is inside the limit, amber when they split, red when none is. Counts of versions, not probabilities.'
+    : 'Drag the marker along the rail, or click the chart. The charts show each limited reading hour by hour against its limit. Marker color shows headroom: green is comfortably inside the limit, amber is close to it (within about 15% of the limit), red is past it.';
+}
+function checkDaylight(members) {
   const mode = $('tod').value;
-  if ((mode === 'day' || mode === 'night') && !state.seriesObj.observations.some((o) => 'is_day' in o.values)) {
+  if ((mode === 'day' || mode === 'night') && !members.some((m) => m.obs.some((o) => 'is_day' in o.values))) {
     throw new Error('This data has no daylight (is_day) values, so day or night cannot be told apart. Use "Custom hours" instead.');
   }
+}
+function run() {
+  if (!hasData()) throw new Error('Load some data first.');
+  if (dataKind === 'ensemble') return runEnsemble();
+  state.mode = 'single';
+  state.seriesObj = JSON.parse(series);
+  state.members = [{ name: 'forecast', obs: state.seriesObj.observations }];
+  checkDaylight(state.members);
+  setModeUi();
   const result = JSON.parse(wint.search(series, $('plan').value));
   render(result);
+}
+function runEnsemble() {
+  const ensemble = JSON.parse(ensembleJson);
+  state.mode = 'ensemble';
+  state.seriesObj = ensemble.members[0].series;
+  state.members = ensemble.members.map((m) => ({ name: m.name, obs: m.series.observations }));
+  checkDaylight(state.members);
+  setModeUi();
+  const result = JSON.parse(wint.searchEnsemble(ensembleJson, $('plan').value, Number($('agree').value), 0.5));
+  renderEnsemble(result);
 }
 
 function evidenceTable(items) {
@@ -183,6 +242,7 @@ function evidenceTable(items) {
 function showDetail(kind, w) {
   const box = $('detail');
   box.replaceChildren();
+  if (state.mode === 'ensemble') return showEnsembleDetail(box, w);
   if (kind === 'ok') {
     box.append(el('strong', { textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}: fits your limits (score ${w.suitability.toFixed(2)})` }),
       el('p', { className: 'hint', textContent: 'For each rule, the reading closest to its limit (the tightest margin) or the worst-scoring reading:' }),
@@ -191,6 +251,22 @@ function showDetail(kind, w) {
     box.append(el('strong', { textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}: rejected` }),
       el('p', { textContent: `First failure: ${w.failure.stage} / ${w.failure.constraint}, at ${fmtTime(w.failure.timestamp_ms)}: reading ${fmtReading(w.failure)}, needed ${w.failure.expected}.` }));
   }
+}
+
+/** Each forecast version's verdict on the window, and why. */
+function showEnsembleDetail(box, w) {
+  const table = el('table', { className: 'ev' });
+  table.append(el('tr', {}, el('th', { textContent: 'Forecast version' }), el('th', { textContent: 'Verdict' }), el('th', { textContent: 'Why' })));
+  const words = { feasible: 'fits', infeasible: 'does not fit', unknown: 'cannot say' };
+  for (const o of w.outcomes) {
+    const why = o.verdict === 'feasible' ? `preference score ${o.suitability.toFixed(2)}`
+      : o.verdict === 'infeasible' ? `${o.failure.stage} / ${o.failure.constraint}: ${fmtReading(o.failure)}, needed ${o.failure.expected}`
+      : `no ${o.failure.metric} reading`;
+    table.append(el('tr', { className: `v-${o.verdict}` }, el('td', { textContent: o.member }), el('td', { textContent: words[o.verdict] }), el('td', { textContent: why })));
+  }
+  const details = el('details', {}, el('summary', { textContent: `Per-version verdicts (${w.outcomes.length})` }), el('div', { className: 'scroll' }, table));
+  details.open = w.outcomes.length <= 8;
+  box.append(el('strong', { textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}: what each forecast version says` }), details);
 }
 
 // ---------- per-hour view of the limits (display only; the engine decides feasibility) ----------
@@ -212,19 +288,19 @@ function marginOf(op, actual, threshold) {
 }
 
 /** One panel per metric that has a range limit (not an on/off flag like is_day), in plan order. */
-function buildPanels(plan, seriesObj) {
+function buildPanels(plan, members) {
+  const has = (metric) => members.some((m) => m.obs.some((o) => metric in o.values));
   const panels = [];
   for (const stage of plan.stages) {
     for (const c of stage.constraints) {
-      if (c.type !== 'hard' || !(c.comparison in OPS)) continue;
-      if (!seriesObj.observations.some((o) => c.metric in o.values)) continue;
+      if (c.type !== 'hard' || !(c.comparison in OPS) || !has(c.metric)) continue;
       let panel = panels.find((p) => p.metric === c.metric);
       if (!panel) { panel = { metric: c.metric, limits: [] }; panels.push(panel); }
       panel.limits.push({ op: c.comparison, threshold: c.threshold, name: c.name });
     }
   }
   return panels.slice(0, 5).map((p) => {
-    const values = seriesObj.observations.map((o) => o.values[p.metric]).filter((v) => v !== undefined);
+    const values = members.flatMap((m) => m.obs.map((o) => o.values[p.metric])).filter((v) => v !== undefined);
     const all = [...values, ...p.limits.map((l) => l.threshold)];
     let lo = Math.min(...all), hi = Math.max(...all);
     if (hi === lo) { lo -= 1; hi += 1; }
@@ -253,6 +329,16 @@ function hourStatus(panel, value) {
 const headroomText = (panel, s) => s.margin === undefined ? 'no reading'
   : `${fmtNum(Math.abs(s.margin))} ${units[panel.metric] ?? ''} ${s.status === 'bad' ? 'past' : 'inside'} the limit`.replace('  ', ' ');
 
+/** How the forecast versions stand at hour `i`: readings, how many are inside every limit, and the spread. */
+function hourAgreement(panel, i) {
+  const readings = state.members.map((m) => m.obs[i].values[panel.metric]).filter((v) => v !== undefined).sort((a, b) => a - b);
+  const inside = readings.filter((v) => panel.limits.every((l) => OPS[l.op](v, l.threshold))).length;
+  const n = readings.length;
+  const status = n === 0 ? 'missing' : inside === n ? 'ok' : inside === 0 ? 'bad' : 'tight';
+  const median = n === 0 ? undefined : n % 2 ? readings[(n - 1) / 2] : (readings[n / 2 - 1] + readings[n / 2]) / 2;
+  return { status, inside, n, min: readings[0], max: readings[n - 1], median };
+}
+
 // ---------- rail + chart ----------
 const ML = 50, MR = 12, PH = 86, GAP = 12, AXIS = 24;
 
@@ -260,24 +346,27 @@ const ML = 50, MR = 12, PH = 86, GAP = 12, AXIS = 24;
 function drawChart(defs) {
   const host = $('chart');
   host.replaceChildren();
-  const { seriesObj } = state;
+  const { members } = state;
   const panels = defs;
   state.panels = [];
-  if (!seriesObj || !panels.length) { state.geom = null; return; }
-  const obs = seriesObj.observations, n = obs.length, cadence = seriesObj.cadence_ms;
+  if (!members.length || !panels.length) { state.geom = null; return; }
+  const multi = members.length > 1;
+  const obs = members[0].obs, n = obs.length, cadence = state.seriesObj.cadence_ms;
   const t0 = obs[0].timestamp_ms, span = n * cadence;
   const width = Math.max(host.clientWidth || 640, 320), plotW = width - ML - MR;
   const height = panels.length * (PH + GAP) + AXIS;
   const x = (t) => ML + ((t - t0) / span) * plotW;
   state.geom = { t0, span, cadence, plotW, x };
-  const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': 'Hourly readings against their limits' });
-  // consecutive night hours become one band (no seams between hours)
+  const svg = svgEl('svg', { viewBox: `0 0 ${width} ${height}`, role: 'img', 'aria-label': multi ? 'Hourly spread between forecast versions against their limits' : 'Hourly readings against their limits' });
+  // consecutive night hours become one band (no seams between hours); is_day comes from the first version that has it
   const nightRuns = [];
-  for (const o of obs) {
+  const daySource = members.find((m) => m.obs.some((o) => 'is_day' in o.values))?.obs ?? [];
+  for (const o of daySource) {
     if (o.values.is_day !== 0) continue;
     const last = nightRuns[nightRuns.length - 1];
     if (last && last[1] === o.timestamp_ms) last[1] += cadence; else nightRuns.push([o.timestamp_ms, o.timestamp_ms + cadence]);
   }
+  const cx = (i) => x(obs[i].timestamp_ms + cadence / 2);
 
   state.panels = panels.map((panel, pi) => {
     const top = pi * (PH + GAP);
@@ -293,24 +382,64 @@ function drawChart(defs) {
     g.append(svgEl('text', { class: 'ax', x: ML - 6, y: y(panel.lo) + 4, 'text-anchor': 'end' }, fmtAxis(panel.lo)));
     const band = svgEl('rect', { class: 'band', y: top + 14, height: PH - 14, x: 0, width: 0 });
     g.append(band);
+    const stats = obs.map((_, i) => hourAgreement(panel, i));
+    if (multi) {
+      // spread between the lowest and highest version, in runs where at least one version has a reading
+      let run = [];
+      const flush = () => {
+        if (run.length) {
+          const up = run.map((i) => `${cx(i).toFixed(1)},${y(stats[i].max).toFixed(1)}`);
+          const down = [...run].reverse().map((i) => `${cx(i).toFixed(1)},${y(stats[i].min).toFixed(1)}`);
+          g.append(svgEl('polygon', { class: 'spread', points: [...up, ...down].join(' ') }));
+        }
+        run = [];
+      };
+      stats.forEach((s, i) => (s.n ? run.push(i) : flush()));
+      flush();
+      // each version as a faint line, when there are few enough to tell apart
+      if (members.length <= 8) {
+        for (const m of members) {
+          let d = '', pen = false;
+          m.obs.forEach((o, i) => {
+            const v = o.values[panel.metric];
+            if (v === undefined) { pen = false; return; }
+            d += `${pen ? 'L' : 'M'}${cx(i).toFixed(1)},${y(v).toFixed(1)}`;
+            pen = true;
+          });
+          g.append(svgEl('path', { class: 'mline', d }, svgEl('title', {}, m.name)));
+        }
+      }
+    }
     for (const l of panel.limits) g.append(svgEl('line', { class: 'limit', x1: ML, x2: ML + plotW, y1: y(l.threshold), y2: y(l.threshold) }));
-    // reading line, broken where a reading is missing
+    // the line is the reading (single forecast) or the median across versions, broken where nothing has a reading
     let d = '', pen = false;
-    obs.forEach((o) => {
-      const v = o.values[panel.metric];
+    stats.forEach((s, i) => {
+      const v = multi ? s.median : obs[i].values[panel.metric];
       if (v === undefined) { pen = false; return; }
-      d += `${pen ? 'L' : 'M'}${x(o.timestamp_ms + cadence / 2).toFixed(1)},${y(v).toFixed(1)}`;
+      d += `${pen ? 'L' : 'M'}${cx(i).toFixed(1)},${y(v).toFixed(1)}`;
       pen = true;
     });
     g.append(svgEl('path', { class: 'line', d }));
-    const markers = obs.map((o) => {
-      const v = o.values[panel.metric];
-      const s = hourStatus(panel, v);
-      const cx = x(o.timestamp_ms + cadence / 2), cy = v === undefined ? top + PH - 8 : y(v);
-      const m = svgEl('circle', { class: `mk m-${s.status}`, cx: cx.toFixed(1), cy: cy.toFixed(1), r: 3.6, 'data-status': s.status, 'data-metric': panel.metric, 'data-t': o.timestamp_ms },
-        svgEl('title', {}, `${fmtTime(o.timestamp_ms)}: ${fmtValue(panel.metric, v)} (${headroomText(panel, s)})`));
+    const markers = obs.map((o, i) => {
+      const s = stats[i];
+      let status, label, cyv;
+      if (multi) {
+        status = s.status;
+        cyv = s.median;
+        label = s.n === 0 ? `${fmtTime(o.timestamp_ms)}: no version has a reading`
+          : `${fmtTime(o.timestamp_ms)}: ${s.inside} of ${s.n} versions inside the limit (range ${fmtValue(panel.metric, s.min)} to ${fmtValue(panel.metric, s.max)})`;
+      } else {
+        const v = o.values[panel.metric];
+        const h = hourStatus(panel, v);
+        status = h.status;
+        cyv = v;
+        label = `${fmtTime(o.timestamp_ms)}: ${fmtValue(panel.metric, v)} (${headroomText(panel, h)})`;
+      }
+      const cyp = cyv === undefined ? top + PH - 8 : y(cyv);
+      const m = svgEl('circle', { class: `mk m-${status}`, cx: cx(i).toFixed(1), cy: cyp.toFixed(1), r: 3.6, 'data-status': status, 'data-metric': panel.metric, 'data-t': o.timestamp_ms, 'data-inside': s.inside ?? '', 'data-n': s.n ?? '' },
+        svgEl('title', {}, label));
       g.append(m);
-      return { m, t: o.timestamp_ms, status: s.status };
+      return { m, t: o.timestamp_ms, status };
     });
     const cursor = svgEl('line', { class: 'cursor', y1: top + 14, y2: top + PH, x1: 0, x2: 0 });
     g.append(cursor);
@@ -343,13 +472,14 @@ function drawChart(defs) {
   host.append(svg);
 }
 
-function drawRail(result) {
+/** The rail's mini-strip: one segment per start time, colored like the strip. `alpha(item)` sets the intensity. */
+function drawRail(alpha) {
   const cells = $('rail-cells');
   cells.replaceChildren();
-  const minScore = Math.min(...result.feasible.map((w) => w.suitability), 1);
   for (const item of state.all) {
     const span = el('span', { className: item.kind });
-    if (item.kind === 'ok') span.style.setProperty('--a', (0.45 + 0.55 * (item.w.suitability - minScore) / Math.max(1 - minScore, 0.001)).toFixed(2));
+    const a = alpha(item);
+    if (a !== undefined) span.style.setProperty('--a', a.toFixed(2));
     cells.append(span);
   }
   const rail = $('rail');
@@ -361,6 +491,7 @@ function renderReadout(item) {
   const box = $('readout');
   box.replaceChildren();
   const w = item.w;
+  if (state.mode === 'ensemble') return renderEnsembleReadout(box, item);
   const verdict = item.kind === 'ok'
     ? `Fits your limits, score ${w.suitability.toFixed(2)}`
     : `Rejected: ${w.failure.constraint} (${fmtReading(w.failure)}, needed ${w.failure.expected})`;
@@ -378,6 +509,33 @@ function renderReadout(item) {
   if (state.panels.length) box.append(el('div', { className: 'hint', textContent: `Readings at the ${fmtHour(w.start_ms)} hour:` }), list);
 }
 
+/** "Fits in 3 of 4 that can answer", with the reasons: what blocked it and what could not be judged. */
+function agreementLines(w) {
+  const answering = w.feasible + w.infeasible;
+  const lines = [];
+  if (w.unknown) lines.push(`Cannot say: ${w.unknown} (${w.missing.map((m) => `${m.metric} for ${m.members}`).join(', ')}).`);
+  if (w.blockers.length) lines.push(`Blocked by ${w.blockers.map((b) => `${b.constraint} in ${b.members}`).join(', ')}.`);
+  if (w.suitability !== null && w.suitability !== undefined) lines.push(`Preference score ${w.suitability.toFixed(2)}, averaged over the versions where it fits.`);
+  return { headline: w.agreement === null ? 'No forecast version could answer' : `Fits in ${w.feasible} of ${answering} forecast versions that can answer`, lines };
+}
+
+function renderEnsembleReadout(box, item) {
+  const w = item.w;
+  const { headline, lines } = agreementLines(w);
+  box.append(el('div', { className: `verdict ${item.kind}`, textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}. ${headline}${w.meets_requirement ? ': meets your requirement' : ': does not meet your requirement'}` }));
+  for (const line of lines) box.append(el('div', { className: 'hint', textContent: line }));
+  const i = state.members[0].obs.findIndex((o) => o.timestamp_ms === w.start_ms);
+  const list = el('ul');
+  for (const { panel } of state.panels) {
+    const s = hourAgreement(panel, i);
+    list.append(el('li', {},
+      el('i', { className: `dot m-${s.status}` }),
+      el('span', { textContent: s.n ? `${panel.metric}: ${s.inside} of ${s.n} inside the limit` : `${panel.metric}: no reading` }),
+      el('span', { className: 'hr', textContent: s.n ? `range ${fmtValue(panel.metric, s.min)} to ${fmtValue(panel.metric, s.max)}` : '' })));
+  }
+  if (state.panels.length) box.append(el('div', { className: 'hint', textContent: `At the ${fmtHour(w.start_ms)} hour:` }), list);
+}
+
 /** Moves the selection: strip, rail, chart marker and the readout/evidence panels all follow. */
 function select(i) {
   if (!state.all.length) return;
@@ -388,7 +546,7 @@ function select(i) {
   const rail = $('rail');
   rail.value = String(i);
   rail.dataset.kind = item.kind;
-  rail.setAttribute('aria-valuetext', `${fmtTime(w.start_ms)}, ${item.kind === 'ok' ? `fits, score ${w.suitability.toFixed(2)}` : 'rejected'}`);
+  rail.setAttribute('aria-valuetext', `${fmtTime(w.start_ms)}, ${state.mode === 'ensemble' ? agreementLines(w).headline.toLowerCase() : item.kind === 'ok' ? `fits, score ${w.suitability.toFixed(2)}` : 'rejected'}`);
   const g = state.geom;
   for (const p of state.panels) {
     if (g) {
@@ -410,7 +568,7 @@ function stepFit(direction) {
   }
 }
 function bestIndex() {
-  const best = state.result?.feasible[0];
+  const best = state.mode === 'ensemble' ? state.result?.windows[0] : state.result?.feasible[0];
   return best ? state.all.findIndex((it) => it.w.start_ms === best.start_ms) : 0;
 }
 function stopPlay() {
@@ -430,43 +588,64 @@ function togglePlay() {
   }, 450);
 }
 
-function render(result) {
-  stopPlay();
-  const all = [
-    ...result.feasible.map((w) => ({ kind: 'ok', w })),
-    ...result.rejected.map((w) => ({ kind: 'bad', w })),
-  ].sort((a, b) => a.w.start_ms - b.w.start_ms);
-  state.all = all;
-  state.result = result;
-  state.panels = [];
-  state.geom = null;
-
-  $('results').hidden = false;
-  $('detail').replaceChildren();
-  $('readout').replaceChildren();
-  const total = all.length;
-  $('summary').textContent = total === 0
-    ? `Your data (${seriesLabel}) is shorter than the operation, so there is nothing to search.`
-    : `${result.feasible.length} of ${total} possible start times fit all your limits. Data: ${seriesLabel}.`;
-
+/** Builds the start-time strip: one button per candidate, grouped by day. */
+function buildStrip(labelOf, alphaOf, extra) {
   const strip = $('strip');
   strip.replaceChildren();
   let lastDay = '';
-  const minScore = Math.min(...result.feasible.map((w) => w.suitability), 1);
-  all.forEach((item, i) => {
+  state.all.forEach((item, i) => {
     const day = fmtTime(item.w.start_ms, { hour: undefined, minute: undefined });
     if (day !== lastDay) { strip.append(el('div', { className: 'day', textContent: day })); lastDay = day; }
-    const label = `${fmtHour(item.w.start_ms)} start: ${item.kind === 'ok' ? `fits, score ${item.w.suitability.toFixed(2)}` : 'rejected'}`;
+    const label = `${fmtHour(item.w.start_ms)} start: ${labelOf(item)}`;
     const cell = el('button', { type: 'button', className: `cell ${item.kind}`, title: label, ariaPressed: 'false' });
     cell.setAttribute('aria-label', label);
     cell.dataset.start = String(item.w.start_ms);
     cell.dataset.end = String(item.w.end_ms);
-    if (item.kind === 'ok') {
-      cell.style.setProperty('--a', (0.45 + 0.55 * (item.w.suitability - minScore) / Math.max(1 - minScore, 0.001)).toFixed(2));
-    }
+    Object.entries(extra?.(item) ?? {}).forEach(([k, v]) => { cell.dataset[k] = String(v); });
+    const a = alphaOf(item);
+    if (a !== undefined) cell.style.setProperty('--a', a.toFixed(2));
     cell.addEventListener('click', () => select(i));
     strip.append(cell);
   });
+}
+
+/** Common ending of both render paths: rail, chart, first selection. */
+function finishRender(alpha) {
+  drawRail(alpha);
+  state.panelDefs = buildPanels(JSON.parse($('plan').value), state.members);
+  drawChart(state.panelDefs);
+  if (state.all.length) select(bestIndex());
+  status('');
+  // Smooth scrolling only for people who have not asked for reduced motion.
+  const calm = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+  $('results').scrollIntoView({ behavior: calm ? 'auto' : 'smooth', block: 'nearest' });
+}
+
+function startRender(result, all) {
+  stopPlay();
+  state.all = all;
+  state.result = result;
+  state.panels = [];
+  state.geom = null;
+  $('results').hidden = false;
+  $('detail').replaceChildren();
+  $('readout').replaceChildren();
+}
+
+function render(result) {
+  startRender(result, [
+    ...result.feasible.map((w) => ({ kind: 'ok', w })),
+    ...result.rejected.map((w) => ({ kind: 'bad', w })),
+  ].sort((a, b) => a.w.start_ms - b.w.start_ms));
+  const total = state.all.length;
+  $('ens-note').hidden = true;
+  $('summary').textContent = total === 0
+    ? `Your data (${seriesLabel}) is shorter than the operation, so there is nothing to search.`
+    : `${result.feasible.length} of ${total} possible start times fit all your limits. Data: ${seriesLabel}.`;
+
+  const minScore = Math.min(...result.feasible.map((w) => w.suitability), 1);
+  const alpha = (item) => (item.kind === 'ok' ? 0.45 + 0.55 * (item.w.suitability - minScore) / Math.max(1 - minScore, 0.001) : undefined);
+  buildStrip((item) => (item.kind === 'ok' ? `fits, score ${item.w.suitability.toFixed(2)}` : 'rejected'), alpha);
 
   const best = $('best');
   best.replaceChildren();
@@ -486,14 +665,56 @@ function render(result) {
     li.append(el('details', {}, el('summary', { textContent: 'Evidence' }), evidenceTable(w.evidence)));
     best.append(li);
   }
-
-  drawRail(result);
-  state.panelDefs = buildPanels(JSON.parse($('plan').value), state.seriesObj);
-  drawChart(state.panelDefs);
-  if (total) select(bestIndex());
-  status('');
-  $('results').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  finishRender(alpha);
 }
+
+/** Results for several forecast versions: agreement per window instead of a plain fit / no fit. */
+function renderEnsemble(result) {
+  const all = result.windows
+    .map((w) => ({ kind: w.meets_requirement ? 'ok' : (w.agreement ?? 0) > 0 ? 'mix' : 'bad', w }))
+    .sort((a, b) => a.w.start_ms - b.w.start_ms);
+  startRender(result, all);
+  const total = all.length;
+  const meeting = all.filter((it) => it.kind === 'ok').length;
+  const requirement = AGREE_TEXT[Number($('agree').value)] ?? '';
+  $('summary').textContent = total === 0
+    ? `Your data (${seriesLabel}) is shorter than the operation, so there is nothing to search.`
+    : `${meeting} of ${total} possible start times meet your requirement: fits in ${requirement}, with at least half of all ${result.members.length} versions able to answer. Data: ${seriesLabel}. This counts forecast versions; it is not a probability.`;
+
+  // Rules on a metric that no forecast version provides cannot be judged by anyone: say so, by name
+  // (the engine reports these as `unprovided`).
+  const absent = result.unprovided;
+  const note = $('ens-note');
+  note.hidden = absent.length === 0;
+  note.textContent = absent.length ? `No forecast version provides ${absent.join(', ')}, so rules on ${absent.length === 1 ? 'it' : 'them'} cannot be judged and no window can meet the requirement while they apply. Relax those rules in the plan, or use another source.` : '';
+
+  const alpha = (item) => (item.kind === 'bad' ? undefined : item.kind === 'ok' ? 0.45 + 0.55 * (item.w.agreement ?? 0) : 0.3 + 0.7 * (item.w.agreement ?? 0));
+  buildStrip((item) => {
+    const w = item.w;
+    return w.agreement === null ? 'no version could answer' : `fits in ${w.feasible} of ${w.feasible + w.infeasible}`;
+  }, alpha, (item) => ({ agreement: item.w.agreement ?? '', meets: item.kind === 'ok' }));
+
+  const best = $('best');
+  best.replaceChildren();
+  if (!meeting) {
+    best.append(el('li', { textContent: 'No window meets your requirement. The closest are listed first; click a cell above to see what each forecast version says, or lower the agreement needed.' }));
+  }
+  for (const w of result.windows.slice(0, 5)) {
+    const { headline, lines } = agreementLines(w);
+    const li = el('li', {},
+      el('div', { className: 'when', textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}` }),
+      el('div', { className: 'score', textContent: `${headline}${w.meets_requirement ? '' : ' (does not meet your requirement)'}` }));
+    if (w.agreement !== null) {
+      const bar = el('div', { className: 'bar' }, el('i'));
+      bar.firstChild.style.width = `${Math.round(w.agreement * 100)}%`;
+      li.append(bar);
+    }
+    for (const line of lines) li.append(el('div', { className: 'hint', textContent: line }));
+    best.append(li);
+  }
+  finishRender(alpha);
+}
+
 // ---------- wiring ----------
 let presets = [];
 function embeddedWasm() {
@@ -515,11 +736,13 @@ async function main() {
     $('units').append(el('li', { textContent: `${m.name}: ${m.unit}` }));
   }
   refreshPlan();
-  $('preset').addEventListener('change', () => guarded(null, refreshPlan));
-  $('hours').addEventListener('change', () => guarded(null, refreshPlan));
+  // Changing the activity or the length updates the plan and, when data is loaded, the answer.
+  for (const id of ['preset', 'hours']) {
+    $(id).addEventListener('change', () => guarded(null, async () => { refreshPlan(); if (hasData()) run(); }));
+  }
   $('tz').addEventListener('change', () => { if (!$('results').hidden) guarded(null, run); });
   for (const id of ['tod', 'tod-from', 'tod-to']) {
-    $(id).addEventListener('change', () => guarded(null, async () => { retune(); if (series) run(); }));
+    $(id).addEventListener('change', () => guarded(null, async () => { retune(); if (hasData()) run(); }));
   }
   $('rail').addEventListener('input', (e) => select(Number(e.target.value)));
   $('prev-fit').addEventListener('click', () => stepFit(-1));
@@ -537,13 +760,15 @@ async function main() {
   $('place').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); guarded(null, searchPlaces); } });
   $('run-live').addEventListener('click', () => guarded(null, async () => { await loadLive(); run(); }));
   $('run-sample').addEventListener('click', () => guarded(null, async () => { await loadSample(); run(); }));
+  $('run-recorded').addEventListener('click', () => guarded(null, async () => { await loadRecorded(); run(); }));
   $('csv').addEventListener('change', (e) => {
     const file = e.target.files[0];
     e.target.value = '';
     if (file) guarded(null, async () => { await loadCsv(file); run(); });
   });
   // Re-running after editing the plan reuses the loaded data.
-  $('plan').addEventListener('change', () => { if (series) guarded(null, async () => run()); });
+  $('plan').addEventListener('change', () => { if (hasData()) guarded(null, async () => run()); });
+  $('agree').addEventListener('change', () => { if (hasData()) guarded(null, async () => run()); });
   status('Ready.');
 }
 

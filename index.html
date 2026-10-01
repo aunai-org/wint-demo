@@ -16,7 +16,7 @@
   <main>
     <section class="panel" aria-labelledby="setup-h">
       <h2 id="setup-h">1. Where and what</h2>
-      <p id="embed-note" class="note" hidden>This copy runs in a sandbox that cannot reach forecast services, so it works on synthetic sample data or your own CSV. The <a href="https://github.com/aunai-org/wint-demo">standalone demo</a> adds live forecasts and place search.</p>
+      <p id="embed-note" class="note" hidden>This copy runs in a sandbox that cannot reach forecast services, so it works on synthetic sample data, a recorded real forecast, or your own CSV. The <a href="https://github.com/aunai-org/wint-demo">standalone demo</a> adds live forecasts and place search.</p>
       <div class="grid">
         <label class="wide" data-live>Place
           <span class="row">
@@ -28,6 +28,13 @@
         <label data-live>Latitude <input id="lat" type="number" step="any" min="-90" max="90" value="52.52"></label>
         <label data-live>Longitude <input id="lon" type="number" step="any" min="-180" max="180" value="13.41"></label>
         <label data-live>Forecast days <input id="days" type="number" min="1" max="16" value="3"></label>
+        <label data-live>Forecast source
+          <select id="source">
+            <option value="single">One forecast</option>
+            <option value="models">Compare 4 weather models</option>
+            <option value="ensemble">Ensemble (about 40 members)</option>
+          </select>
+        </label>
         <label>Activity
           <select id="preset"></select>
         </label>
@@ -42,6 +49,13 @@
         </label>
         <label id="tod-from-l" hidden>From (place's clock) <input id="tod-from" type="time" value="09:00"></label>
         <label id="tod-to-l" hidden>Until <input id="tod-to" type="time" value="20:00"></label>
+        <label id="agree-l" hidden>Agreement needed
+          <select id="agree">
+            <option value="1">Every version that can answer</option>
+            <option value="0.8">At least 80%</option>
+            <option value="0.5">At least half</option>
+          </select>
+        </label>
         <label>Show times in
           <select id="tz">
             <option value="place">the place's local time</option>
@@ -54,6 +68,7 @@
       <div class="row actions">
         <button id="run-live" type="button" data-live>Find windows (live forecast)</button>
         <button id="run-sample" type="button" class="secondary">Use synthetic sample data</button>
+        <button id="run-recorded" type="button" class="secondary">Use a recorded real forecast (4 models)</button>
         <label class="file secondary">Upload CSV<input id="csv" type="file" accept=".csv,text/csv"></label>
       </div>
       <p id="status" role="status" aria-live="polite"></p>
@@ -70,10 +85,11 @@
       <h2 id="res-h">3. Answer</h2>
       <p id="summary"></p>
       <h3>Every possible start time</h3>
-      <p class="hint">Each cell is a start time. Green = the whole operation fits your limits (darker = better preference score). Grey = rejected. Click a cell for the evidence.</p>
+      <p id="ens-note" class="note warn" role="status" hidden></p>
+      <p id="strip-hint" class="hint"></p>
       <div id="strip" class="strip" role="list"></div>
       <h3>Scrub through time</h3>
-      <p class="hint">Drag the marker along the rail, or click the chart. The charts show each limited reading hour by hour against its limit. Marker color shows headroom: green is comfortably inside the limit, amber is close to it (within about 15% of the limit), red is past it.</p>
+      <p id="scrub-hint" class="hint"></p>
       <div class="rail-buttons">
         <button id="prev-fit" type="button" class="secondary small">◀ Previous fit</button>
         <button id="play" type="button" class="secondary small" aria-pressed="false">▶ Play</button>
@@ -87,10 +103,15 @@
       <div id="readout" class="readout" aria-live="polite"></div>
       <div id="chart" class="chart"></div>
       <div class="legend" aria-hidden="true">
-        <span><i class="dot m-ok"></i> comfortable headroom</span>
-        <span><i class="dot m-tight"></i> tight</span>
-        <span><i class="dot m-bad"></i> past a limit</span>
-        <span><i class="dot m-missing"></i> no reading</span>
+        <span data-mode="single"><i class="dot m-ok"></i> comfortable headroom</span>
+        <span data-mode="single"><i class="dot m-tight"></i> tight</span>
+        <span data-mode="single"><i class="dot m-bad"></i> past a limit</span>
+        <span data-mode="single"><i class="dot m-missing"></i> no reading</span>
+        <span data-mode="ensemble" hidden><i class="dot m-ok"></i> every version inside the limit</span>
+        <span data-mode="ensemble" hidden><i class="dot m-tight"></i> versions split</span>
+        <span data-mode="ensemble" hidden><i class="dot m-bad"></i> none inside</span>
+        <span data-mode="ensemble" hidden><i class="dot m-missing"></i> no version has a reading</span>
+        <span data-mode="ensemble" hidden><i class="swatch spread"></i> spread between versions (line = median)</span>
         <span><i class="swatch night"></i> night</span>
         <span><i class="swatch band"></i> selected operation</span>
       </div>

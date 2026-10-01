@@ -18,6 +18,8 @@ What you can do with it:
 - **Headroom colors.** Each hourly marker is green (comfortably inside the limit), amber (within about 15% of the limit) or red (past it). This is headroom against the limits, *not* a confidence score: wint treats the forecast as exact, and forecast uncertainty is on the roadmap.
 - **Time of day.** Any time, daylight only, night only, or custom hours (including overnight such as 20:00 to 06:00), on the place's own clock. Times are shown in the place's local time by default, or your time zone, or UTC.
 
+- **Compare forecasts.** Choose "Compare 4 weather models" or "Ensemble (about 40 members)" as the forecast source, or load the **recorded real forecast** (4 models, Berlin, 1 Oct 2026; works offline). Each start time then shows "fits in k of n forecast versions", the strip and rail shade by how many agree (green: meets your requirement, amber: fits in some but not enough, grey: fits in none), and the chart draws the spread between versions. Pick how much agreement you need. A version that lacks a reading a rule needs (a model with no visibility) *cannot say* and is not counted as disagreeing; a banner names any metric that no version provides. This counts forecast versions; it is **not** a probability.
+
 Try **Use synthetic sample data** first: it needs no network. **Find windows (live forecast)** calls Open-Meteo from your browser; **Upload CSV** takes your own hourly data (see the [CSV format](https://github.com/aunai-org/wint/blob/main/src/adapters/csv.rs)).
 
 ## How it fits together
@@ -27,6 +29,7 @@ Try **Use synthetic sample data** first: it needs no network. **Find windows (li
 | `vendor/` | The engine, built from wint (`wint.js`, `wint_bg.wasm`, `wint.d.ts`). `vendor/VERSION` records the exact wint commit. |
 | `app.js` | UI logic. Calls the engine's JSON-in/JSON-out functions; no weather logic lives here. |
 | `sample-forecast.json` | Synthetic hourly data in Open-Meteo's response shape, for offline use. Not a real forecast. |
+| `sample-multi-model.json` | A real 4-model Open-Meteo response for Berlin (trimmed to 48 h), recorded 1 Oct 2026, so agreement can be shown offline. |
 
 Update the vendored engine from a local wint checkout (needs the Rust toolchain, `wasm32-unknown-unknown` and `wasm-bindgen-cli`, see wint's README):
 
@@ -51,7 +54,7 @@ npm run serve &      # in another terminal, or in the background
 npm test             # drives the page in headless Chromium using the synthetic sample
 ```
 
-`npm test` covers loading, results, the rail and chart (including a check that the chart's red markers agree with the engine's rejections), time-of-day modes, the place clock, plan editing, CSV upload, graceful network failures and the mobile layout, using the synthetic sample and mocked API errors. `npm run test:single` builds the single-file page and checks it under a strict no-network CSP (with WASM allowed), including the light/dark theme switch.
+`npm test` (two suites) covers loading, results, the rail and chart (including a check that the chart's red markers agree with the engine's rejections), time-of-day modes, the place clock, plan editing, CSV upload, graceful network failures and the mobile layout, using the synthetic sample and mocked API errors. The second suite covers several forecast versions: agreement colors, the per-version verdicts, the requirement control, the missing-metric banner, time of day across versions and live fetching with mocked responses. `npm run test:single` builds the single-file page and checks it under a strict no-network CSP (with WASM allowed), including the light/dark theme switch.
 
 ## Caveats
 

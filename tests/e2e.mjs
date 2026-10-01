@@ -9,7 +9,7 @@ const { chromium } = require(process.env.PLAYWRIGHT_MODULE ?? 'playwright');
 const base = process.argv[2] ?? 'http://localhost:8765/';
 const shots = process.argv[3];
 const browser = await chromium.launch({ executablePath: process.env.CHROMIUM_PATH || undefined });
-const page = await browser.newPage({ viewport: { width: 1000, height: 900 } });
+const page = await browser.newPage({ viewport: { width: 1000, height: 900 }, reducedMotion: 'reduce' });
 const problems = [];
 // Browsers log failed requests; the test simulates two on purpose, so only those are ignored.
 page.on('console', (m) => m.type() === 'error' && !/^Failed to load resource/.test(m.text()) && problems.push(`console: ${m.text()}`));

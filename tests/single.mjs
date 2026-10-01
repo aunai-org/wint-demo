@@ -33,6 +33,13 @@ assert.match(await page.textContent('#summary'), /of 71 possible start times fit
 await page.click('#strip .cell.ok');
 assert.match(await page.textContent('#detail'), /fits your limits/);
 
+// The recorded real multi-model forecast works offline too, with agreement shown.
+await page.click('#run-recorded');
+await page.waitForFunction(() => /^43 of 47 possible start times meet your requirement/.test(document.getElementById('summary').textContent));
+assert.equal(await page.isVisible('#agree'), true);
+assert.equal((await page.$$('#chart polygon.spread')).length >= 5, true);
+assert.match(await page.textContent('#readout'), /Fits in 2 of 2 forecast versions that can answer/);
+
 // Explicit theme override wins over the system preference, in both directions.
 const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 await page.emulateMedia({ colorScheme: 'light' });

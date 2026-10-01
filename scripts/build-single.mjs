@@ -29,10 +29,13 @@ if (app.includes("from './vendor")) throw new Error('app.js import was not repla
 const wasmB64 = readFileSync(join(root, 'vendor/wint_bg.wasm')).toString('base64');
 const sample = read('sample-forecast.json').trim();
 JSON.parse(sample); // fail the build on a corrupt sample
+const sampleMulti = read('sample-multi-model.json').trim();
+JSON.parse(sampleMulti);
 
 const script = `window.WINT_EMBED = true;
 window.WINT_WASM_B64 = ${JSON.stringify(wasmB64)};
 window.WINT_SAMPLE = ${JSON.stringify(sample)};
+window.WINT_SAMPLE_MULTI = ${JSON.stringify(sampleMulti)};
 const wint = (() => {
 ${wint}
 return { default: __wbg_init, initSync, ${names.join(', ')} };

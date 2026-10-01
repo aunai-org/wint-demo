@@ -2,20 +2,20 @@
 :root {
   --bg: #f6f7f9; --panel: #ffffff; --text: #1c2430; --muted: #5b6675; --line: #d9dee6;
   --accent: #1b6ef3; --accent-text: #ffffff; --ok: 28 140 84; --bad: #c5cbd4; --warn: #b3261e;
-  --accent-rgb: 27 110 243; --tight: #b7791f; --night: 27 36 52; --night-a: .09;
+  --accent-rgb: 27 110 243; --tight-rgb: 183 121 31; --tight: #b7791f; --night: 27 36 52; --night-a: .09;
   color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
     --bg: #12161c; --panel: #1a2029; --text: #e8ecf2; --muted: #9aa5b5; --line: #2c3542;
     --accent: #5b9bff; --accent-text: #08101d; --ok: 74 200 130; --bad: #303947; --warn: #ff8a80;
-    --accent-rgb: 91 155 255; --tight: #e0a93b; --night: 0 0 0; --night-a: .28; color-scheme: dark;
+    --accent-rgb: 91 155 255; --tight-rgb: 224 169 59; --tight: #e0a93b; --night: 0 0 0; --night-a: .28; color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #12161c; --panel: #1a2029; --text: #e8ecf2; --muted: #9aa5b5; --line: #2c3542;
   --accent: #5b9bff; --accent-text: #08101d; --ok: 74 200 130; --bad: #303947; --warn: #ff8a80;
-  --accent-rgb: 91 155 255; --tight: #e0a93b; --night: 0 0 0; --night-a: .28; color-scheme: dark;
+  --accent-rgb: 91 155 255; --tight-rgb: 224 169 59; --tight: #e0a93b; --night: 0 0 0; --night-a: .28; color-scheme: dark;
 }
 * { box-sizing: border-box; }
 [hidden] { display: none !important; }
@@ -107,3 +107,17 @@ button.small { padding: 6px 10px; font-size: .85rem; }
 .chart .cursor { stroke: var(--text); stroke-width: 2; }
 .chart .mk { stroke: var(--panel); stroke-width: 1.5; }
 .chart .mk.inwin { stroke: var(--text); stroke-width: 1.5; }
+
+.cell.mix { background: rgb(var(--tight-rgb) / var(--a, 1)); }
+.rail-cells span.mix { background: rgb(var(--tight-rgb) / var(--a, 1)); }
+.rail input[type="range"][data-kind="mix"]::-webkit-slider-thumb { background: var(--tight); }
+.rail input[type="range"][data-kind="mix"]::-moz-range-thumb { background: var(--tight); }
+.readout .verdict.mix { color: var(--tight); }
+.note.warn { border-color: var(--tight); color: var(--text); }
+.chart .spread { fill: rgb(var(--accent-rgb) / .14); stroke: none; }
+.chart .mline { fill: none; stroke: var(--muted); stroke-width: 1; opacity: .45; }
+.swatch.spread { background: rgb(var(--accent-rgb) / .25); }
+.scroll { max-height: 22rem; overflow: auto; }
+table.ev tr.v-infeasible td:nth-child(2) { color: var(--warn); }
+table.ev tr.v-unknown td:nth-child(2) { color: var(--tight); }
+table.ev tr.v-feasible td:nth-child(2) { color: rgb(var(--ok)); }
