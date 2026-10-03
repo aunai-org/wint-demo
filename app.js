@@ -60,8 +60,30 @@ function clockHour(ms) {
   const z = zoned(ms);
   return Number(new Intl.DateTimeFormat('en-GB', { hour: '2-digit', hour12: false, timeZone: z.timeZone }).format(new Date(z.ms))) % 24;
 }
+// ---------- wording ----------
+// The engine returns data only: a limit is an operator and a threshold, a clock check is minutes and an
+// offset. Every word, rounding and unit on this page is the demo's own (the Rust `present` module is an
+// optional default that this page does not use).
+const clockText = (minutes) => `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
+const offsetText = (minutes) => `UTC${minutes < 0 ? '-' : '+'}${clockText(Math.abs(minutes))}`;
+const num4 = (n) => String(Number(n.toFixed(4))); // at most 4 decimals, no trailing zeros
+/** What a piece of evidence was checked against, e.g. `<= 10` or `within 09:00-12:00 local`. */
+function describeExpectation(x) {
+  switch (x.type) {
+    case 'comparison': return `${x.comparison} ${num4(x.threshold)}`;
+    case 'preference': {
+      const p = x.preference;
+      if (p.kind === 'range') return `range: ${num4(p.min)}..=${num4(p.max)}, scale ${num4(p.scale)}`;
+      return `${p.kind}: ideal ${num4(p.ideal)}, scale ${num4(p.scale)}`;
+    }
+    case 'clock_window': return `within ${clockText(x.from_minute)}-${clockText(x.to_minute)} local`;
+    default: return '';
+  }
+}
+const describeClock = (c) => `${clockText(c.start_minute)} to ${clockText(c.end_minute)} local (${offsetText(c.utc_offset_minutes)})`;
+/** What was read: the examined clock span for a time-of-day check, otherwise the value with its unit. */
 function fmtReading(e) {
-  return e.note ?? fmtValue(e.metric, e.actual);
+  return e.clock ? describeClock(e.clock) : fmtValue(e.metric, e.actual);
 }
 function fmtValue(metric, value) {
   if (value === null || value === undefined) return 'missing';
@@ -233,7 +255,7 @@ function evidenceTable(items) {
     table.append(el('tr', {},
       el('td', { textContent: `${e.stage} / ${e.constraint}` }),
       el('td', { textContent: fmtReading(e) }),
-      el('td', { textContent: e.expected }),
+      el('td', { textContent: describeExpectation(e.expectation) }),
       el('td', { textContent: fmtTime(e.timestamp_ms) })));
   }
   return table;
@@ -249,7 +271,7 @@ function showDetail(kind, w) {
       evidenceTable(w.evidence));
   } else {
     box.append(el('strong', { textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}: rejected` }),
-      el('p', { textContent: `First failure: ${w.failure.stage} / ${w.failure.constraint}, at ${fmtTime(w.failure.timestamp_ms)}: reading ${fmtReading(w.failure)}, needed ${w.failure.expected}.` }));
+      el('p', { textContent: `First failure: ${w.failure.stage} / ${w.failure.constraint}, at ${fmtTime(w.failure.timestamp_ms)}: reading ${fmtReading(w.failure)}, needed ${describeExpectation(w.failure.expectation)}.` }));
   }
 }
 
@@ -260,7 +282,7 @@ function showEnsembleDetail(box, w) {
   const words = { feasible: 'fits', infeasible: 'does not fit', unknown: 'cannot say' };
   for (const o of w.outcomes) {
     const why = o.verdict === 'feasible' ? `preference score ${o.suitability.toFixed(2)}`
-      : o.verdict === 'infeasible' ? `${o.failure.stage} / ${o.failure.constraint}: ${fmtReading(o.failure)}, needed ${o.failure.expected}`
+      : o.verdict === 'infeasible' ? `${o.failure.stage} / ${o.failure.constraint}: ${fmtReading(o.failure)}, needed ${describeExpectation(o.failure.expectation)}`
       : `no ${o.failure.metric} reading`;
     table.append(el('tr', { className: `v-${o.verdict}` }, el('td', { textContent: o.member }), el('td', { textContent: words[o.verdict] }), el('td', { textContent: why })));
   }
@@ -489,7 +511,7 @@ function renderReadout(item) {
   if (state.mode === 'ensemble') return renderEnsembleReadout(box, item);
   const verdict = item.kind === 'ok'
     ? `Fits your limits, score ${w.suitability.toFixed(2)}`
-    : `Rejected: ${w.failure.constraint} (${fmtReading(w.failure)}, needed ${w.failure.expected})`;
+    : `Rejected: ${w.failure.constraint} (${fmtReading(w.failure)}, needed ${describeExpectation(w.failure.expectation)})`;
   box.append(el('div', { className: `verdict c-${item.color}`, textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}. ${verdict}` }));
   const obs = state.seriesObj.observations.find((o) => o.timestamp_ms === w.start_ms);
   const list = el('ul');
@@ -585,7 +607,7 @@ function togglePlay() {
 }
 
 const GOOD_SCORE = 0.8;
-const isMissingReading = (w) => w.failure.actual == null && !w.failure.note;
+const isMissingReading = (w) => w.failure.actual == null && w.failure.expectation.type === 'comparison';
 
 /**
  * THE color rules for the start-time strip, the rail and its thumb. Keep this function, the README

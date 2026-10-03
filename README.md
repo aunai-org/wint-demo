@@ -70,7 +70,8 @@ So relaxing the requirement from "every version" to "at least half" adds dots an
 - What blocked a window is named with a count ("Blocked by gust limit in 1").
 - The summary states the requirement in force ("fits in every forecast version that can answer, with at least half of all 4 versions able to answer") and that this is not a probability.
 - A metric that no version provides is named in a banner above the strip.
-- Everything shown is computed by the engine; the page only formats it. The colors and markers are display-only, and a test checks that they agree with the engine's decisions.
+- **The engine returns data; this page owns every word.** A limit arrives as an operator and a threshold (`{"type": "comparison", "comparison": "<=", "threshold": 10}`), a time-of-day check as minutes and a UTC offset, a verdict as a tag. The wording ("needed <= 10", "09:00 to 11:00 local (UTC+02:00)"), the rounding, the units and every color are chosen here, in `app.js` (`describeExpectation`, `describeClock`, `fmtValue`, `colorOf`), and not by the engine. The engine's optional Rust `present` module is not used by this page. That is the point of the split: another page could word and color the same results differently without touching the engine.
+- The decisions come from the engine (which windows fit, agreement, coverage, whether a window meets the requirement). The colors and hour markers are display-only, and a test checks that they agree with those decisions.
 
 ## How it fits together
 
