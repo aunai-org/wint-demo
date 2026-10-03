@@ -192,8 +192,8 @@ function setModeUi() {
   $('agree-l').hidden = !ens;
   document.querySelectorAll('[data-mode]').forEach((node) => (node.hidden = node.dataset.mode !== state.mode));
   $('strip-hint').textContent = ens
-    ? 'Each cell is a start time. Green = the whole operation meets your agreement requirement; amber = it fits in some forecast versions but not enough; grey = it fits in none. Darker = more versions agree. Click a cell for each version\'s verdict.'
-    : 'Each cell is a start time. Green = the whole operation fits your limits (darker = better preference score). Grey = rejected. Click a cell for the evidence.';
+    ? 'Each cell is a start time. Green = the whole operation meets your agreement requirement; amber = it fits in some forecast versions but not enough; red = it fits in none; grey = no version could answer. Click a cell for each version\'s verdict.'
+    : 'Each cell is a start time. Green = the whole operation fits your limits with a good preference score; amber = it fits, but only moderately (score under 0.8); red = rejected; grey = cannot say, a reading is missing. Click a cell for the evidence.';
   $('scrub-hint').textContent = ens
     ? 'Drag the marker along the rail, or click the chart. Each panel shows the spread between forecast versions hour by hour against the limit. A marker is green when every version is inside the limit, amber when they split, red when none is. Counts of versions, not probabilities.'
     : 'Drag the marker along the rail, or click the chart. The charts show each limited reading hour by hour against its limit. Marker color shows headroom: green is comfortably inside the limit, amber is close to it (within about 15% of the limit), red is past it.';
@@ -472,16 +472,11 @@ function drawChart(defs) {
   host.append(svg);
 }
 
-/** The rail's mini-strip: one segment per start time, colored like the strip. `alpha(item)` sets the intensity. */
-function drawRail(alpha) {
+/** The rail's mini-strip: one segment per start time, colored like the strip. */
+function drawRail() {
   const cells = $('rail-cells');
   cells.replaceChildren();
-  for (const item of state.all) {
-    const span = el('span', { className: item.kind });
-    const a = alpha(item);
-    if (a !== undefined) span.style.setProperty('--a', a.toFixed(2));
-    cells.append(span);
-  }
+  for (const item of state.all) cells.append(el('span', { className: cellClass(item) }));
   const rail = $('rail');
   rail.max = String(Math.max(state.all.length - 1, 0));
   rail.disabled = state.all.length === 0;
@@ -545,7 +540,7 @@ function select(i) {
   $('strip').querySelectorAll('.cell').forEach((c, ci) => c.setAttribute('aria-pressed', String(ci === i)));
   const rail = $('rail');
   rail.value = String(i);
-  rail.dataset.kind = item.kind;
+  rail.dataset.kind = item.tier === 'mid' ? 'mix' : item.tier === 'na' ? 'na' : item.kind; // the thumb takes the cell's color
   rail.setAttribute('aria-valuetext', `${fmtTime(w.start_ms)}, ${state.mode === 'ensemble' ? agreementLines(w).headline.toLowerCase() : item.kind === 'ok' ? `fits, score ${w.suitability.toFixed(2)}` : 'rejected'}`);
   const g = state.geom;
   for (const p of state.panels) {
@@ -588,8 +583,16 @@ function togglePlay() {
   }, 450);
 }
 
+/**
+ * Strip and rail colors: green = fits (score at or above GOOD_SCORE, or meets the agreement requirement),
+ * amber = fits but only moderately (`mid`) or in some forecast versions (`mix`), red = rejected,
+ * grey = cannot say, because a reading is missing (`na`).
+ */
+const GOOD_SCORE = 0.8;
+const cellClass = (item) => `${item.kind}${item.tier ? ` ${item.tier}` : ''}`;
+
 /** Builds the start-time strip: one button per candidate, grouped by day. */
-function buildStrip(labelOf, alphaOf, extra) {
+function buildStrip(labelOf, extra) {
   const strip = $('strip');
   strip.replaceChildren();
   let lastDay = '';
@@ -597,21 +600,19 @@ function buildStrip(labelOf, alphaOf, extra) {
     const day = fmtTime(item.w.start_ms, { hour: undefined, minute: undefined });
     if (day !== lastDay) { strip.append(el('div', { className: 'day', textContent: day })); lastDay = day; }
     const label = `${fmtHour(item.w.start_ms)} start: ${labelOf(item)}`;
-    const cell = el('button', { type: 'button', className: `cell ${item.kind}`, title: label, ariaPressed: 'false' });
+    const cell = el('button', { type: 'button', className: `cell ${cellClass(item)}`, title: label, ariaPressed: 'false' });
     cell.setAttribute('aria-label', label);
     cell.dataset.start = String(item.w.start_ms);
     cell.dataset.end = String(item.w.end_ms);
     Object.entries(extra?.(item) ?? {}).forEach(([k, v]) => { cell.dataset[k] = String(v); });
-    const a = alphaOf(item);
-    if (a !== undefined) cell.style.setProperty('--a', a.toFixed(2));
     cell.addEventListener('click', () => select(i));
     strip.append(cell);
   });
 }
 
 /** Common ending of both render paths: rail, chart, first selection. */
-function finishRender(alpha) {
-  drawRail(alpha);
+function finishRender() {
+  drawRail();
   state.panelDefs = buildPanels(JSON.parse($('plan').value), state.members);
   drawChart(state.panelDefs);
   if (state.all.length) select(bestIndex());
@@ -634,8 +635,8 @@ function startRender(result, all) {
 
 function render(result) {
   startRender(result, [
-    ...result.feasible.map((w) => ({ kind: 'ok', w })),
-    ...result.rejected.map((w) => ({ kind: 'bad', w })),
+    ...result.feasible.map((w) => ({ kind: 'ok', tier: w.suitability >= GOOD_SCORE ? '' : 'mid', w })),
+    ...result.rejected.map((w) => ({ kind: 'bad', tier: w.failure.actual == null && !w.failure.note ? 'na' : '', w })),
   ].sort((a, b) => a.w.start_ms - b.w.start_ms));
   const total = state.all.length;
   $('ens-note').hidden = true;
@@ -643,14 +644,12 @@ function render(result) {
     ? `Your data (${seriesLabel}) is shorter than the operation, so there is nothing to search.`
     : `${result.feasible.length} of ${total} possible start times fit all your limits. Data: ${seriesLabel}.`;
 
-  const minScore = Math.min(...result.feasible.map((w) => w.suitability), 1);
-  const alpha = (item) => (item.kind === 'ok' ? 0.45 + 0.55 * (item.w.suitability - minScore) / Math.max(1 - minScore, 0.001) : undefined);
-  buildStrip((item) => (item.kind === 'ok' ? `fits, score ${item.w.suitability.toFixed(2)}` : 'rejected'), alpha);
+  buildStrip((item) => (item.kind === 'ok' ? `fits, score ${item.w.suitability.toFixed(2)}` : item.tier === 'na' ? 'cannot say, a reading is missing' : 'rejected'));
 
   const best = $('best');
   best.replaceChildren();
   if (!result.feasible.length) {
-    best.append(el('li', { textContent: 'No window fits. Click a grey cell above to see which rule failed, or relax a limit in the plan.' }));
+    best.append(el('li', { textContent: 'No window fits. Click a red cell above to see which rule failed, or relax a limit in the plan.' }));
   }
   for (const w of result.feasible.slice(0, 5)) {
     const li = el('li', {},
@@ -665,13 +664,13 @@ function render(result) {
     li.append(el('details', {}, el('summary', { textContent: 'Evidence' }), evidenceTable(w.evidence)));
     best.append(li);
   }
-  finishRender(alpha);
+  finishRender();
 }
 
 /** Results for several forecast versions: agreement per window instead of a plain fit / no fit. */
 function renderEnsemble(result) {
   const all = result.windows
-    .map((w) => ({ kind: w.meets_requirement ? 'ok' : (w.agreement ?? 0) > 0 ? 'mix' : 'bad', w }))
+    .map((w) => ({ kind: w.meets_requirement ? 'ok' : (w.agreement ?? 0) > 0 ? 'mix' : 'bad', tier: w.agreement === null ? 'na' : '', w }))
     .sort((a, b) => a.w.start_ms - b.w.start_ms);
   startRender(result, all);
   const total = all.length;
@@ -688,11 +687,10 @@ function renderEnsemble(result) {
   note.hidden = absent.length === 0;
   note.textContent = absent.length ? `No forecast version provides ${absent.join(', ')}, so rules on ${absent.length === 1 ? 'it' : 'them'} cannot be judged and no window can meet the requirement while they apply. Relax those rules in the plan, or use another source.` : '';
 
-  const alpha = (item) => (item.kind === 'bad' ? undefined : item.kind === 'ok' ? 0.45 + 0.55 * (item.w.agreement ?? 0) : 0.3 + 0.7 * (item.w.agreement ?? 0));
   buildStrip((item) => {
     const w = item.w;
     return w.agreement === null ? 'no version could answer' : `fits in ${w.feasible} of ${w.feasible + w.infeasible}`;
-  }, alpha, (item) => ({ agreement: item.w.agreement ?? '', meets: item.kind === 'ok' }));
+  }, (item) => ({ agreement: item.w.agreement ?? '', meets: item.kind === 'ok' }));
 
   const best = $('best');
   best.replaceChildren();
@@ -712,7 +710,7 @@ function renderEnsemble(result) {
     for (const line of lines) li.append(el('div', { className: 'hint', textContent: line }));
     best.append(li);
   }
-  finishRender(alpha);
+  finishRender();
 }
 
 // ---------- wiring ----------
