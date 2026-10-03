@@ -88,6 +88,17 @@
       <p id="ens-note" class="note warn" role="status" hidden></p>
       <p id="strip-hint" class="hint"></p>
       <div id="strip" class="strip" role="list"></div>
+      <div class="legend strip-key" aria-label="Key to the start-time colors">
+        <span data-mode="single"><i class="swatch c-green"></i> fits, good preference score (0.8 or more)</span>
+        <span data-mode="single"><i class="swatch c-amber"></i> fits, moderate score (under 0.8)</span>
+        <span data-mode="single"><i class="swatch c-red"></i> rejected: a limit is broken</span>
+        <span data-mode="single"><i class="swatch c-grey"></i> missing reading: cannot be approved</span>
+        <span data-mode="ensemble" hidden><i class="swatch c-green"></i> every version that can answer says it fits</span>
+        <span data-mode="ensemble" hidden><i class="swatch c-amber"></i> fits in some versions only</span>
+        <span data-mode="ensemble" hidden><i class="swatch c-amber meets"></i> amber with a dot: meets your agreement requirement</span>
+        <span data-mode="ensemble" hidden><i class="swatch c-red"></i> fits in none</span>
+        <span data-mode="ensemble" hidden><i class="swatch c-grey"></i> no version could answer</span>
+      </div>
       <h3>Scrub through time</h3>
       <p id="scrub-hint" class="hint"></p>
       <div class="rail-buttons">

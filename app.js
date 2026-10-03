@@ -192,8 +192,8 @@ function setModeUi() {
   $('agree-l').hidden = !ens;
   document.querySelectorAll('[data-mode]').forEach((node) => (node.hidden = node.dataset.mode !== state.mode));
   $('strip-hint').textContent = ens
-    ? 'Each cell is a start time. Green = the whole operation meets your agreement requirement; amber = it fits in some forecast versions but not enough; red = it fits in none; grey = no version could answer. Click a cell for each version\'s verdict.'
-    : 'Each cell is a start time. Green = the whole operation fits your limits with a good preference score; amber = it fits, but only moderately (score under 0.8); red = rejected; grey = cannot say, a reading is missing. Click a cell for the evidence.';
+    ? 'Each cell is a start time; the color says how much the forecast versions agree (see the key). Click a cell for each version\'s verdict.'
+    : 'Each cell is a start time; the color shows how it fares (see the key). Click a cell for the evidence.';
   $('scrub-hint').textContent = ens
     ? 'Drag the marker along the rail, or click the chart. Each panel shows the spread between forecast versions hour by hour against the limit. A marker is green when every version is inside the limit, amber when they split, red when none is. Counts of versions, not probabilities.'
     : 'Drag the marker along the rail, or click the chart. The charts show each limited reading hour by hour against its limit. Marker color shows headroom: green is comfortably inside the limit, amber is close to it (within about 15% of the limit), red is past it.';
@@ -490,7 +490,7 @@ function renderReadout(item) {
   const verdict = item.kind === 'ok'
     ? `Fits your limits, score ${w.suitability.toFixed(2)}`
     : `Rejected: ${w.failure.constraint} (${fmtReading(w.failure)}, needed ${w.failure.expected})`;
-  box.append(el('div', { className: `verdict ${item.kind}`, textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}. ${verdict}` }));
+  box.append(el('div', { className: `verdict c-${item.color}`, textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}. ${verdict}` }));
   const obs = state.seriesObj.observations.find((o) => o.timestamp_ms === w.start_ms);
   const list = el('ul');
   for (const { panel } of state.panels) {
@@ -517,7 +517,7 @@ function agreementLines(w) {
 function renderEnsembleReadout(box, item) {
   const w = item.w;
   const { headline, lines } = agreementLines(w);
-  box.append(el('div', { className: `verdict ${item.kind}`, textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}. ${headline}${w.meets_requirement ? ': meets your requirement' : ': does not meet your requirement'}` }));
+  box.append(el('div', { className: `verdict c-${item.color}`, textContent: `${fmtTime(w.start_ms)} → ${fmtTime(w.end_ms)}. ${headline}${w.meets_requirement ? ': meets your requirement' : ': does not meet your requirement'}` }));
   for (const line of lines) box.append(el('div', { className: 'hint', textContent: line }));
   const i = state.members[0].obs.findIndex((o) => o.timestamp_ms === w.start_ms);
   const list = el('ul');
@@ -540,7 +540,8 @@ function select(i) {
   $('strip').querySelectorAll('.cell').forEach((c, ci) => c.setAttribute('aria-pressed', String(ci === i)));
   const rail = $('rail');
   rail.value = String(i);
-  rail.dataset.kind = item.tier === 'mid' ? 'mix' : item.tier === 'na' ? 'na' : item.kind; // the thumb takes the cell's color
+  rail.dataset.kind = item.kind;
+  rail.dataset.color = item.color; // the thumb takes the cell's color
   rail.setAttribute('aria-valuetext', `${fmtTime(w.start_ms)}, ${state.mode === 'ensemble' ? agreementLines(w).headline.toLowerCase() : item.kind === 'ok' ? `fits, score ${w.suitability.toFixed(2)}` : 'rejected'}`);
   const g = state.geom;
   for (const p of state.panels) {
@@ -583,13 +584,42 @@ function togglePlay() {
   }, 450);
 }
 
-/**
- * Strip and rail colors: green = fits (score at or above GOOD_SCORE, or meets the agreement requirement),
- * amber = fits but only moderately (`mid`) or in some forecast versions (`mix`), red = rejected,
- * grey = cannot say, because a reading is missing (`na`).
- */
 const GOOD_SCORE = 0.8;
-const cellClass = (item) => `${item.kind}${item.tier ? ` ${item.tier}` : ''}`;
+const isMissingReading = (w) => w.failure.actual == null && !w.failure.note;
+
+/**
+ * THE color rules for the start-time strip, the rail and its thumb. Keep this function, the README
+ * section "How to read the display" and the tests (tests/colors in e2e.mjs and ensemble.mjs) in step.
+ *
+ * One forecast:
+ *   green = fits, displayed preference score at least GOOD_SCORE   amber = fits, displayed score below it
+ *   red   = rejected, a limit is broken                     grey  = rejected, a reading is missing
+ * Several forecast versions: the color says how much the versions that can answer agree.
+ *   green = all of them say it fits (and enough versions could answer)
+ *   amber = it fits in some of them, or in all but too few could answer
+ *   red   = it fits in none        grey = no version could answer
+ *   Separately, `meets` marks an amber window that meets the "agreement needed" requirement, so a
+ *   relaxed requirement never makes a split window look unanimous.
+ */
+function colorOf(item) {
+  const w = item.w;
+  if (state.mode === 'ensemble') {
+    if (w.agreement === null) return 'grey';
+    if (w.agreement === 0) return 'red';
+    return w.agreement === 1 && w.meets_requirement ? 'green' : 'amber';
+  }
+  // Judged on the score as displayed (two decimals), so a window labelled 0.80 is never colored "under 0.8".
+  if (item.kind === 'ok') return Number(w.suitability.toFixed(2)) >= GOOD_SCORE ? 'green' : 'amber';
+  return isMissingReading(w) ? 'grey' : 'red';
+}
+/** Adds the color (and the "meets requirement" mark) to freshly built items. */
+function colored(items) {
+  return items.map((item) => {
+    const color = colorOf(item);
+    return { ...item, color, meets: state.mode === 'ensemble' && item.kind === 'ok' && color === 'amber' };
+  });
+}
+const cellClass = (item) => `${item.kind} c-${item.color}${item.meets ? ' meets' : ''}`;
 
 /** Builds the start-time strip: one button per candidate, grouped by day. */
 function buildStrip(labelOf, extra) {
@@ -634,17 +664,17 @@ function startRender(result, all) {
 }
 
 function render(result) {
-  startRender(result, [
-    ...result.feasible.map((w) => ({ kind: 'ok', tier: w.suitability >= GOOD_SCORE ? '' : 'mid', w })),
-    ...result.rejected.map((w) => ({ kind: 'bad', tier: w.failure.actual == null && !w.failure.note ? 'na' : '', w })),
-  ].sort((a, b) => a.w.start_ms - b.w.start_ms));
+  startRender(result, colored([
+    ...result.feasible.map((w) => ({ kind: 'ok', w })),
+    ...result.rejected.map((w) => ({ kind: 'bad', w })),
+  ]).sort((a, b) => a.w.start_ms - b.w.start_ms));
   const total = state.all.length;
   $('ens-note').hidden = true;
   $('summary').textContent = total === 0
     ? `Your data (${seriesLabel}) is shorter than the operation, so there is nothing to search.`
     : `${result.feasible.length} of ${total} possible start times fit all your limits. Data: ${seriesLabel}.`;
 
-  buildStrip((item) => (item.kind === 'ok' ? `fits, score ${item.w.suitability.toFixed(2)}` : item.tier === 'na' ? 'cannot say, a reading is missing' : 'rejected'));
+  buildStrip((item) => (item.kind === 'ok' ? `fits, score ${item.w.suitability.toFixed(2)}` : item.color === 'grey' ? 'missing reading, so it cannot be approved' : 'rejected'));
 
   const best = $('best');
   best.replaceChildren();
@@ -669,8 +699,8 @@ function render(result) {
 
 /** Results for several forecast versions: agreement per window instead of a plain fit / no fit. */
 function renderEnsemble(result) {
-  const all = result.windows
-    .map((w) => ({ kind: w.meets_requirement ? 'ok' : (w.agreement ?? 0) > 0 ? 'mix' : 'bad', tier: w.agreement === null ? 'na' : '', w }))
+  const all = colored(result.windows
+    .map((w) => ({ kind: w.meets_requirement ? 'ok' : (w.agreement ?? 0) > 0 ? 'mix' : 'bad', w })))
     .sort((a, b) => a.w.start_ms - b.w.start_ms);
   startRender(result, all);
   const total = all.length;
@@ -689,7 +719,7 @@ function renderEnsemble(result) {
 
   buildStrip((item) => {
     const w = item.w;
-    return w.agreement === null ? 'no version could answer' : `fits in ${w.feasible} of ${w.feasible + w.infeasible}`;
+    return w.agreement === null ? 'no version could answer' : `fits in ${w.feasible} of ${w.feasible + w.infeasible}${item.kind === 'ok' ? ', meets your requirement' : ''}`;
   }, (item) => ({ agreement: item.w.agreement ?? '', meets: item.kind === 'ok' }));
 
   const best = $('best');

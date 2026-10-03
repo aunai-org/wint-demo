@@ -38,7 +38,31 @@ assert.deepEqual(await kinds(), { ok: 43, mix: 4, bad: 0 }); // same numbers as 
 assert.equal(await page.isVisible('#agree'), true);
 assert.equal(await page.isVisible('[data-mode="ensemble"]:not([hidden])'), true);
 assert.equal(await page.$$eval('[data-mode="single"]', (n) => n.every((x) => x.hidden)), true);
-assert.match(await text('#strip-hint'), /amber = it fits in some forecast versions but not enough/);
+assert.match(await text('.strip-key span:not([hidden])'), /every version that can answer says it fits/);
+const keyText = await page.$$eval('.strip-key span:not([hidden])', (s) => s.map((x) => x.textContent.trim()));
+assert.equal(keyText.some((k) => /meets your agreement requirement/.test(k)), true);
+assert.equal(keyText.some((k) => /fits in none/.test(k)), true);
+
+// ---- Color rules (colorOf in app.js; the README section "How to read the display") ----
+// Color = how much the versions that can answer agree; the dot marks "meets your requirement".
+const colorOf = (cls) => ['green', 'amber', 'red', 'grey'].find((c) => cls.includes(`c-${c}`));
+const cellInfo = () => page.$$eval('#strip .cell', (cells) => cells.map((c) => ({ cls: [...c.classList], agreement: c.dataset.agreement, meets: c.dataset.meets === 'true', label: c.getAttribute('aria-label') })));
+const checkRules = async (where) => {
+  for (const c of await cellInfo()) {
+    const expected = c.agreement === '' ? 'grey' : Number(c.agreement) === 0 ? 'red' : Number(c.agreement) === 1 && c.meets ? 'green' : 'amber';
+    assert.equal(colorOf(c.cls), expected, `${where}: ${c.label} agreement=${JSON.stringify(c.agreement)} meets=${c.meets}`);
+    assert.equal(c.cls.includes('meets'), expected === 'amber' && c.meets, `${where}: dot only on amber cells that meet the requirement: ${c.label}`);
+  }
+  // The rail's segments repeat the strip's colors exactly, and its thumb takes the selected cell's color.
+  const rail = await page.$$eval('#rail-cells span', (s) => s.map((x) => [...x.classList].find((c) => c.startsWith('c-'))));
+  const strip = (await cellInfo()).map((c) => `c-${colorOf(c.cls)}`);
+  assert.deepEqual(rail, strip, `${where}: rail and strip colors differ`);
+  const selected = await page.$$eval('#strip .cell', (cells) => { const c = cells.find((x) => x.getAttribute('aria-pressed') === 'true'); return c && [...c.classList].find((k) => k.startsWith('c-')).slice(2); });
+  assert.equal(await page.getAttribute('#rail', 'data-color'), selected, `${where}: thumb color`);
+};
+await checkRules('agree=every');
+const colorCount = async () => { const n = { green: 0, amber: 0, red: 0, grey: 0, dots: 0 }; for (const c of await cellInfo()) { n[colorOf(c.cls)]++; if (c.cls.includes('meets')) n.dots++; } return n; };
+assert.deepEqual(await colorCount(), { green: 43, amber: 4, red: 0, grey: 0, dots: 0 });
 assert.equal(await page.isVisible('#ens-note'), false, 'two of four models do provide visibility');
 
 // The chart shows the spread between versions and each version's own line (4 is few enough to tell apart).
@@ -88,6 +112,11 @@ assert.ok(Number(await page.inputValue('#rail')) > mixIdx);
 await page.selectOption('#agree', '0.5');
 await summaryMatches(/^47 of 47 possible start times meet your requirement: fits in at least half/);
 assert.deepEqual(await kinds(), { ok: 47, mix: 0, bad: 0 });
+// A relaxed requirement must not make a split window look unanimous: the 4 split windows stay amber,
+// now with the dot that says they meet the requirement you chose.
+assert.deepEqual(await colorCount(), { green: 43, amber: 4, red: 0, grey: 0, dots: 4 });
+await checkRules('agree=half');
+assert.equal((await cellInfo()).filter((c) => c.cls.includes('meets')).every((c) => /meets your requirement/.test(c.label)), true);
 await page.selectOption('#agree', '1');
 await summaryMatches(/^43 of 47/);
 
@@ -101,6 +130,8 @@ await summaryMatches(/^0 of 47 possible start times meet/);
 await page.waitForSelector('#ens-note:not([hidden])');
 assert.match(await text('#ens-note'), /No forecast version provides solar_radiation, so rules on it cannot be judged/);
 assert.equal((await kinds()).bad, 47);
+assert.deepEqual(Object.entries(await colorCount()).filter(([k, v]) => v > 0 && k !== 'dots').map(([k]) => k).sort(), ['grey', 'red']);
+await checkRules('unprovided rule');
 // Windows where one model definitely breaks a limit still say so ('fits in 0 of 1'); where none does, nobody can answer.
 const labels = await page.$$eval('#strip .cell', (c) => c.map((x) => x.getAttribute('aria-label')));
 assert.ok(labels.some((l) => /no version could answer/.test(l)), 'some windows cannot be judged by anyone');

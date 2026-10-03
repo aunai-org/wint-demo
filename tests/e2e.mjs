@@ -50,6 +50,29 @@ const bestIdx = Number(await page.inputValue('#rail'));
 assert.equal(await page.$$eval('#strip .cell', (c) => c.findIndex((x) => x.getAttribute('aria-pressed') === 'true')), bestIdx);
 if (shots) await page.screenshot({ path: `${shots}/desktop.png`, fullPage: true });
 
+// Color rules for one forecast (colorOf in app.js; the README section "How to read the display"):
+// green = fits with a preference score of 0.8 or more, amber = fits below that, red = rejected,
+// grey = rejected only because a reading is missing. The rail repeats the strip, the thumb the selection.
+const colorsNow = () => page.$$eval('#strip .cell', (cells) => cells.map((c) => ({ label: c.getAttribute('aria-label'), color: ['green', 'amber', 'red', 'grey'].find((k) => c.classList.contains(`c-${k}`)) })));
+const checkSingleColors = async (where) => {
+  const cells = await colorsNow();
+  for (const { label, color } of cells) {
+    const score = /fits, score (\d\.\d\d)/.exec(label);
+    const expected = score ? (Number(score[1]) >= 0.8 ? 'green' : 'amber') : /missing reading/.test(label) ? 'grey' : 'red';
+    assert.equal(color, expected, `${where}: ${label}`);
+  }
+  const rail = await page.$$eval('#rail-cells span', (s) => s.map((x) => ['green', 'amber', 'red', 'grey'].find((k) => x.classList.contains(`c-${k}`))));
+  assert.deepEqual(rail, cells.map((c) => c.color), `${where}: rail colors differ from the strip`);
+  return cells;
+};
+{
+  const cells = await checkSingleColors('sample');
+  const seen = new Set(cells.map((c) => c.color));
+  assert.deepEqual([...seen].sort(), ['amber', 'green', 'red'], 'the synthetic sample shows three of the four colors');
+  assert.match(await text('.strip-key span:not([hidden])'), /fits, good preference score/);
+  assert.equal(await page.$$eval('.strip-key span:not([hidden])', (s) => s.length), 4);
+}
+
 // Display-only per-hour colors must agree with what the engine decided: a window is feasible
 // exactly when none of its hours is past a limit, and every rejected window contains one.
 const mismatches = await page.evaluate(() => {
@@ -169,6 +192,10 @@ await page.setInputFiles('#csv', { name: 'mine.csv', mimeType: 'text/csv', buffe
 await summaryMatches(/your CSV \(mine\.csv\)/);
 const statuses = await page.$$eval('#chart circle.mk[data-metric="wind_speed"]', (m) => m.map((x) => x.dataset.status));
 assert.deepEqual(statuses, ['ok', 'ok', 'tight', 'ok'], 'headroom colors for 3, 3, 9.2, 3 m/s against a 10 m/s limit');
+// That CSV has no gust, visibility or rain readings, so every window is rejected for a missing reading: grey, not red.
+assert.deepEqual([...new Set((await colorsNow()).map((c) => c.color))], ['grey']);
+assert.match((await colorsNow())[0].label, /missing reading, so it cannot be approved/);
+await checkSingleColors('csv with missing readings');
 assert.ok((await page.$$eval('#chart circle.mk', (m) => m.length)) >= 4);
 await page.selectOption('#tod', 'day');
 await statusIs(/no daylight \(is_day\) values/);
