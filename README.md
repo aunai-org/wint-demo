@@ -116,6 +116,10 @@ npm test             # drives the page in headless Chromium using the synthetic 
 - The live path was checked with real Open-Meteo responses replayed into the browser (place search, forecast URL, parsing, results), and both APIs return `access-control-allow-origin: *`. It has not been run in a browser talking to the API directly, because the development sandbox intercepts TLS.
 - The single-file build cannot fetch forecasts when hosted in a sandbox that blocks network access; it works on sample data or your CSV.
 
+## Hosting
+
+The demo is a static site (no server code), so any static host works. `scripts/build-pages.sh` assembles exactly the files a browser needs into `_site/` (all URLs are relative, so a sub-path such as `/wint-demo/` is fine). `.github/workflows/pages.yml` publishes that folder to GitHub Pages on every push to `main`. One-time setup: Settings, Pages, Source: GitHub Actions. (GitHub Pages on a private repository needs a paid plan; make the repository public or use another host.) For Cloudflare Pages later, point it at this repository with build command `scripts/build-pages.sh _site` and output directory `_site`.
+
 ## Licence
 
-Dual-licensed `Apache-2.0 OR MIT`, matching wint. (Licence texts to be added before public release.)
+MIT, matching wint; see [`LICENSE`](LICENSE).

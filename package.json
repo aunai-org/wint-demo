@@ -1,6 +1,7 @@
 {
   "name": "wint-demo",
   "private": true,
+  "license": "MIT",
   "description": "Browser demo for wint, the environmental operability window engine",
   "scripts": {
     "serve": "python3 -m http.server 8765",
