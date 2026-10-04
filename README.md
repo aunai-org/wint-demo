@@ -1,6 +1,6 @@
 # wint-demo
 
-A browser demo for [wint](https://github.com/aunai-org/wint), the deterministic environmental operability engine. Pick a place and an activity; it finds the time windows that stay inside your limits and shows the evidence for each decision.
+A browser demo for [wint](https://github.com/aunai-org/wint), which finds the time windows when a job can run within the limits you set and explains every decision. Pick a place and an activity (or another example); it finds the time windows that stay inside your limits and shows the evidence for each decision.
 
 **The default example is weather, but the engine is not about weather.** wint is domain-neutral: it takes a table of timestamps and named numbers plus a plan of limits on those names, and a CPU load, an electricity price or an oven flag work exactly like a wind speed. Weather is the first use case, so the demo opens on a weather forecast (place search, live forecasts, presets). The **Example** menu at the top switches to other domains, with their own data and plan: a server deploy window, EV charging, and a bakery batch with a proofing wait. They live in [`examples/`](examples) (copied from wint with `scripts/sync-examples.sh`), and wint's [examples page](https://github.com/aunai-org/wint/blob/master/docs/EXAMPLES.md) explains what "domain-neutral" means and how to bring your own data. Upload CSV works for any domain too: load your readings, then write your plan in the editor.
 
