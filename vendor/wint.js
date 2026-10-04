@@ -285,6 +285,15 @@ export function presetPlan(name, hours) {
 }
 
 /**
+ * Version of the JSON shape of results (the `schema_version` field they carry).
+ * @returns {number}
+ */
+export function schemaVersion() {
+    const ret = wasm.schemaVersion();
+    return ret >>> 0;
+}
+
+/**
  * Runs a window search. `series_json` and `plan_json` use the CLI formats
  * (including `units` / `unit` conversion); returns the result as JSON.
  * @param {string} series_json

@@ -76,11 +76,25 @@ function describeExpectation(x) {
       if (p.kind === 'range') return `range: ${num4(p.min)}..=${num4(p.max)}, scale ${num4(p.scale)}`;
       return `${p.kind}: ideal ${num4(p.ideal)}, scale ${num4(p.scale)}`;
     }
-    case 'clock_window': return `within ${clockText(x.from_minute)}-${clockText(x.to_minute)} local`;
+    case 'clock_window': {
+      const on = daysText(x.days);
+      return `within ${clockText(x.from_minute)}-${clockText(x.to_minute)} local${on ? ` on ${on}` : ''}`;
+    }
     default: return '';
   }
 }
-const describeClock = (c) => `${clockText(c.start_minute)} to ${clockText(c.end_minute)} local (${offsetText(c.utc_offset_minutes)})`;
+const DAY_NAMES = { mon: 'Mon', tue: 'Tue', wed: 'Wed', thu: 'Thu', fri: 'Fri', sat: 'Sat', sun: 'Sun' };
+/** `Mon-Fri`, `Sat, Sun`, or nothing when every day is allowed. */
+function daysText(days = []) {
+  if (days.length >= 7) return '';
+  const names = days.map((d) => DAY_NAMES[d] ?? d);
+  const order = Object.keys(DAY_NAMES);
+  const run = days.length > 2 && days.every((d, i) => order.indexOf(d) === order.indexOf(days[0]) + i);
+  return run ? `${names[0]}-${names[names.length - 1]}` : names.join(', ');
+}
+const describeClock = (c) => `${DAY_NAMES[c.weekday] ?? ''} ${clockText(c.start_minute)} to ${clockText(c.end_minute)} local (${offsetText(c.utc_offset_minutes)})`.trim();
+/** The wait before a stage that has a gap, e.g. `8 h`; empty when the stage follows straight on. */
+const gapText = (ms) => (ms > 0 ? `${num4(ms / 3_600_000)} h` : '');
 /** What was read: the examined clock span for a time-of-day check, otherwise the value with its unit. */
 function fmtReading(e) {
   return e.clock ? describeClock(e.clock) : fmtValue(e.metric, e.actual);
@@ -187,14 +201,30 @@ function applyTimeOfDay(plan) {
       stage.constraints.unshift({ type: 'hard', name: mode === 'day' ? 'daylight only' : 'night only', metric: 'is_day', comparison: '==', threshold: mode === 'day' ? 1 : 0 });
     }
     if (mode === 'custom') stage.schedule = { from: $('tod-from').value || '00:00', to: toClock($('tod-to').value || '24:00') };
+    const days = $('days-of-week').value;
+    if (days !== 'all') stage.schedule = { ...stage.schedule, days: days === 'weekdays' ? ['mon', 'tue', 'wed', 'thu', 'fri'] : ['sat', 'sun'] };
   }
   return plan;
 }
+/** A demo-only plan with a wait: paint, let it cure (4 to 12 h, nothing checked), then a clear coat. */
+const PAINT = 'paint a fence (with a wait)';
+function paintPlan(hours) {
+  const dry = { type: 'hard', name: 'dry', metric: 'precipitation', comparison: '<=', threshold: 0.1 };
+  return {
+    name: 'paint-fence',
+    stages: [
+      { name: 'paint', duration_ms: hours * 3_600_000, constraints: [dry, { type: 'hard', name: 'calm', metric: 'wind_speed', comparison: '<=', threshold: 20, unit: 'km/h' }] },
+      { name: 'clear coat', duration_ms: 3_600_000, gap: { min_ms: 4 * 3_600_000, max_ms: 12 * 3_600_000 }, constraints: [dry] },
+    ],
+  };
+}
+const PAINT_DESC = 'Paint (your operation length), then let it cure for 4 to 12 hours, then a 1-hour clear coat. Both coats need dry weather; the cure is not checked. The window is named by when the painting starts.';
 function refreshPlan() {
   const hours = parseFloat($('hours').value);
-  const plan = applyTimeOfDay(JSON.parse(wint.presetPlan($('preset').value, hours)));
+  const paint = $('preset').value === PAINT;
+  const plan = applyTimeOfDay(paint ? paintPlan(hours) : JSON.parse(wint.presetPlan($('preset').value, hours)));
   $('plan').value = JSON.stringify(plan, null, 2);
-  $('preset-desc').textContent = presets.find((p) => p.name === $('preset').value)?.description ?? '';
+  $('preset-desc').textContent = paint ? PAINT_DESC : presets.find((p) => p.name === $('preset').value)?.description ?? '';
 }
 /** Re-applies the time-of-day control to the plan as currently edited, keeping manual edits. */
 function retune() {
@@ -402,7 +432,9 @@ function drawChart(defs) {
     g.append(svgEl('text', { class: 'ax', x: ML + plotW, y: top + 11, 'text-anchor': 'end' }, `limit ${limitText}`));
     g.append(svgEl('text', { class: 'ax', x: ML - 6, y: y(panel.hi) + 4, 'text-anchor': 'end' }, fmtAxis(panel.hi)));
     g.append(svgEl('text', { class: 'ax', x: ML - 6, y: y(panel.lo) + 4, 'text-anchor': 'end' }, fmtAxis(panel.lo)));
-    const band = svgEl('rect', { class: 'band', y: top + 14, height: PH - 14, x: 0, width: 0 });
+    const band = svgEl('g', { class: 'bands' });
+    band.dataset.y = String(top + 14);
+    band.dataset.h = String(PH - 14);
     g.append(band);
     const stats = obs.map((_, i) => hourAgreement(panel, i));
     if (multi) {
@@ -554,6 +586,9 @@ function renderEnsembleReadout(box, item) {
 }
 
 /** Moves the selection: strip, rail, chart marker and the readout/evidence panels all follow. */
+function bandRect(group, cls, x0, x1) {
+  return svgEl('rect', { class: cls, y: group.dataset.y, height: group.dataset.h, x: x0.toFixed(1), width: Math.max(x1 - x0, 1).toFixed(1) });
+}
 function select(i) {
   if (!state.all.length) return;
   state.selected = i;
@@ -568,13 +603,18 @@ function select(i) {
   const g = state.geom;
   for (const p of state.panels) {
     if (g) {
-      const x0 = g.x(w.start_ms), x1 = g.x(w.end_ms);
-      p.band.setAttribute('x', x0.toFixed(1));
-      p.band.setAttribute('width', Math.max(x1 - x0, 1).toFixed(1));
+      const x0 = g.x(w.start_ms);
+      // One band per stage; when stages have a wait between them, a faint dashed span joins them.
+      const spans = w.stages?.length > 1 ? w.stages : [w];
+      const rects = spans.map((s) => bandRect(p.band, 'band', g.x(s.start_ms), g.x(s.end_ms)));
+      if (spans.length > 1) rects.unshift(bandRect(p.band, 'band wait', x0, g.x(w.end_ms)));
+      p.band.replaceChildren(...rects);
       p.cursor.setAttribute('x1', x0.toFixed(1));
       p.cursor.setAttribute('x2', x0.toFixed(1));
     }
-    p.markers.forEach((m) => m.m.classList.toggle('inwin', m.t >= w.start_ms && m.t < w.end_ms));
+    // Readings inside a stage are "in the operation"; the wait between stages is not.
+    const covered = (t) => (w.stages?.length > 1 ? w.stages.some((s) => t >= s.start_ms && t < s.end_ms) : t >= w.start_ms && t < w.end_ms);
+    p.markers.forEach((m) => m.m.classList.toggle('inwin', covered(m.t)));
   }
   renderReadout(item);
   showDetail(item.kind, w);
@@ -711,7 +751,7 @@ function render(result) {
     bar.firstChild.style.width = `${Math.round(w.suitability * 100)}%`;
     li.append(bar);
     if (w.stages.length > 1) {
-      li.append(el('div', { className: 'hint', textContent: w.stages.map((s) => `${s.name}: ${fmtHour(s.start_ms)}–${fmtHour(s.end_ms)}, score ${s.suitability.toFixed(2)}`).join(' · ') }));
+      li.append(el('div', { className: 'hint', textContent: w.stages.map((s) => `${gapText(s.gap_ms) ? `wait ${gapText(s.gap_ms)} · ` : ''}${s.name}: ${fmtHour(s.start_ms)}–${fmtHour(s.end_ms)}, score ${s.suitability.toFixed(2)}`).join(' · ') }));
     }
     li.append(el('details', {}, el('summary', { textContent: 'Evidence' }), evidenceTable(w.evidence)));
     best.append(li);
@@ -781,6 +821,7 @@ async function main() {
   $('ver').textContent = `v${wint.version()}`;
   presets = JSON.parse(wint.listPresets());
   for (const p of presets) $('preset').append(el('option', { value: p.name, textContent: p.name }));
+  $('preset').append(el('option', { value: PAINT, textContent: PAINT }));
   for (const m of JSON.parse(wint.listMetrics())) {
     units[m.name] = m.unit;
     $('units').append(el('li', { textContent: `${m.name}: ${m.unit}` }));
@@ -791,7 +832,7 @@ async function main() {
     $(id).addEventListener('change', () => guarded(null, async () => { refreshPlan(); if (hasData()) run(); }));
   }
   $('tz').addEventListener('change', () => { if (!$('results').hidden) guarded(null, run); });
-  for (const id of ['tod', 'tod-from', 'tod-to']) {
+  for (const id of ['tod', 'tod-from', 'tod-to', 'days-of-week']) {
     $(id).addEventListener('change', () => guarded(null, async () => { retune(); if (hasData()) run(); }));
   }
   $('rail').addEventListener('input', (e) => select(Number(e.target.value)));

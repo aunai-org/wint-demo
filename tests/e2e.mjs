@@ -24,7 +24,7 @@ const cellHours = (kind) => page.$$eval(`#strip .cell.${kind}`, (cells) => cells
 await page.goto(base);
 await page.waitForFunction(() => document.getElementById('status').textContent === 'Ready.');
 assert.match(await text('#ver'), /^v\d+\.\d+\.\d+/);
-assert.deepEqual(await page.$$eval('#preset option', (o) => o.map((x) => x.value)), ['drone', 'outdoor-event', 'field-work']);
+assert.deepEqual(await page.$$eval('#preset option', (o) => o.map((x) => x.value)), ['drone', 'outdoor-event', 'field-work', 'paint a fence (with a wait)']);
 assert.match(await page.inputValue('#plan'), /"wind_speed"/);
 assert.equal(await page.inputValue('#tz'), 'place', 'times default to the place\'s clock');
 assert.deepEqual(await page.$$eval('#tod option', (o) => o.map((x) => x.value)), ['any', 'day', 'night', 'custom']);
@@ -164,6 +164,40 @@ assert.ok(okHours.length > 0 && okHours.every((h) => h >= 19 || h <= 4), `night 
 if (shots) await page.screenshot({ path: `${shots}/night.png`, fullPage: true });
 await page.selectOption('#tod', 'any');
 await page.waitForFunction(() => !/is_day|schedule/.test(document.getElementById('plan').value));
+
+// ---- Weekdays ----
+// The sample starts on a Monday and runs three days (Mon-Wed), so "weekdays" changes nothing
+// and "weekend" rules every start time out, each with a clock-and-weekday explanation.
+const feasibleBefore = await page.$$eval('#strip .cell.ok', (c) => c.length);
+await page.selectOption('#days-of-week', 'weekdays');
+await page.waitForFunction(() => /"days": \[\s*"mon"/.test(document.getElementById('plan').value));
+assert.equal(await page.$$eval('#strip .cell.ok', (c) => c.length), feasibleBefore);
+await page.selectOption('#days-of-week', 'weekend');
+await page.waitForFunction(() => /"sat"/.test(document.getElementById('plan').value));
+assert.equal(await page.$$eval('#strip .cell.ok', (c) => c.length), 0);
+await page.click('#strip .cell');
+assert.match(await text('#detail'), /time of day[\s\S]*Mon \d\d:00 to \d\d:00 local[\s\S]*within 00:00-24:00 local on Sat, Sun/);
+await page.selectOption('#days-of-week', 'all');
+await page.waitForFunction(() => !/"days"/.test(document.getElementById('plan').value));
+assert.equal(await page.$$eval('#strip .cell.ok', (c) => c.length), feasibleBefore);
+
+// ---- A plan with a wait (gap between stages) ----
+await page.selectOption('#preset', 'paint a fence (with a wait)');
+await page.waitForFunction(() => /"gap"/.test(document.getElementById('plan').value));
+assert.match(await text('#preset-desc'), /cure for 4 to 12 hours/);
+await page.waitForFunction(() => document.querySelector('#best li .hint'));
+const stageLine = await text('#best li .hint');
+assert.match(stageLine, /paint: .*wait \d+(\.\d+)? h · clear coat: /, stageLine);
+// The wait is within the plan's 4 to 12 hours.
+const waited = Number(/wait ([\d.]+) h/.exec(stageLine)[1]);
+assert.ok(waited >= 4 && waited <= 12, `waited ${waited}`);
+// The chart marks each stage and joins them with a dashed span for the wait.
+await page.click('#strip .cell.ok');
+const panels = await page.$$eval('#chart .bands', (g) => g.length);
+assert.equal(await page.$$eval('#chart .band:not(.wait)', (r) => r.length), 2 * panels);
+assert.equal(await page.$$eval('#chart .band.wait', (r) => r.length), panels);
+await page.selectOption('#preset', 'drone');
+await page.waitForFunction(() => !/"gap"/.test(document.getElementById('plan').value));
 
 // ---- Plan editing ----
 await page.click('#plan-panel > summary');

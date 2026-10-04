@@ -107,6 +107,7 @@ button.small { padding: 6px 10px; font-size: .85rem; }
 .chart .frame { stroke: var(--line); stroke-width: 1; }
 .chart .night { fill: rgb(var(--night) / var(--night-a)); }
 .chart .band { fill: rgb(var(--accent-rgb) / .16); stroke: var(--accent); stroke-width: 1; }
+.chart .band.wait { fill: none; stroke-dasharray: 3 3; stroke-opacity: .6; }
 .chart .cursor { stroke: var(--text); stroke-width: 2; }
 .chart .mk { stroke: var(--panel); stroke-width: 1.5; }
 .chart .mk.inwin { stroke: var(--text); stroke-width: 1.5; }

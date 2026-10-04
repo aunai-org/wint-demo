@@ -18,11 +18,13 @@ Try **Use synthetic sample data** first: it needs no network. **Find windows (li
 
 - **Forecast source.** One forecast, a comparison of 4 weather models, or an ensemble of about 40 members. There is also a **recorded real forecast** (4 models, Berlin, 1 Oct 2026) that works offline, a synthetic sample, and CSV upload.
 - **Start-time strip and rail.** Every possible start time is a cell, colored green, amber, red or grey by the rules below. The rail repeats the colors as a mini-strip; drag its marker, use the arrow keys, or use Previous fit, Next fit, Jump to best and Play.
-- **Chart.** One panel per limited metric, hour by hour against its limit, with the selected operation shaded and day and night banded. With several forecast versions each panel draws the spread between the lowest and highest version, a median line, and a faint line per version when there are 8 or fewer. Each hour has a marker (rules below).
+- **Chart.** One panel per limited metric, hour by hour against its limit, with the selected operation shaded and day and night banded. For a plan with a wait between stages, each stage is shaded and a dashed outline joins them; only the stages count as "in the operation". With several forecast versions each panel draws the spread between the lowest and highest version, a median line, and a faint line per version when there are 8 or fewer. Each hour has a marker (rules below).
 - **Readout.** For the selected start time: "fits in k of n forecast versions that can answer", what blocked the others, which versions could not say and why, and a per-version verdict table. The wording never shows a percentage chance.
 - **Agreement needed.** With several versions, choose how much agreement a window needs: every version that can answer, at least 80%, or at least half.
 - **Missing-metric banner.** If a rule needs a metric that no version provides (the ensemble service has no visibility, for example), the demo names it and says no window can meet the requirement while that rule applies.
 - **Time of day.** Any time, daylight only, night only, or custom hours (including overnight such as 20:00 to 06:00), on the place's own clock. Times are shown in the place's local time by default, or your time zone, or UTC.
+- **Days.** Every day, weekdays (Mon-Fri) or weekend (Sat-Sun). The weekday is the local day the window starts on, so an overnight window belongs to the evening it begins. A rejected start explains itself with the weekday and the allowed days.
+- **A plan with a wait.** The activity list ends with a demo-only "paint a fence (with a wait)": paint, a 4 to 12 hour cure that is not checked, then a clear coat. It shows how the engine places the second stage in the best allowed slot; each best window lists the wait it chose.
 - **Recorded forecast, as a check.** On the recorded Berlin forecast with the drone preset, 43 of 47 windows meet the default requirement. The command-line tool gives the same count on the same data.
 
 ## How to read the display (the rules)
@@ -105,7 +107,7 @@ npm run serve &      # in another terminal, or in the background
 npm test             # drives the page in headless Chromium using the synthetic sample
 ```
 
-`npm test` (two suites) covers loading, results, the rail and chart (including a check that the chart's red markers agree with the engine's rejections), time-of-day modes, the place clock, plan editing, CSV upload, graceful network failures and the mobile layout, using the synthetic sample and mocked API errors. The second suite covers several forecast versions: agreement colors, the per-version verdicts, the requirement control, the missing-metric banner, time of day across versions and live fetching with mocked responses. `npm run test:single` builds the single-file page and checks it under a strict no-network CSP (with WASM allowed), including the light/dark theme switch.
+`npm test` (two suites) covers loading, results, the rail and chart (including a check that the chart's red markers agree with the engine's rejections), time-of-day modes, weekdays, the plan with a wait, the place clock, plan editing, CSV upload, graceful network failures and the mobile layout, using the synthetic sample and mocked API errors. The second suite covers several forecast versions: agreement colors, the per-version verdicts, the requirement control, the missing-metric banner, time of day across versions and live fetching with mocked responses. `npm run test:single` builds the single-file page and checks it under a strict no-network CSP (with WASM allowed), including the light/dark theme switch.
 
 ## Caveats
 

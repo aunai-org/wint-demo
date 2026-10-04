@@ -50,6 +50,11 @@ export function parseOpenMeteoEnsemble(response: string): string;
 export function presetPlan(name: string, hours: number): string;
 
 /**
+ * Version of the JSON shape of results (the `schema_version` field they carry).
+ */
+export function schemaVersion(): number;
+
+/**
  * Runs a window search. `series_json` and `plan_json` use the CLI formats
  * (including `units` / `unit` conversion); returns the result as JSON.
  */
@@ -80,6 +85,7 @@ export interface InitOutput {
     readonly parseOpenMeteo: (a: number, b: number, c: number) => void;
     readonly parseOpenMeteoEnsemble: (a: number, b: number, c: number) => void;
     readonly presetPlan: (a: number, b: number, c: number, d: number) => void;
+    readonly schemaVersion: () => number;
     readonly search: (a: number, b: number, c: number, d: number, e: number) => void;
     readonly searchEnsemble: (a: number, b: number, c: number, d: number, e: number, f: number, g: number) => void;
     readonly version: (a: number) => void;
