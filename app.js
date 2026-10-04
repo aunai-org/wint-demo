@@ -158,6 +158,50 @@ async function loadRecorded() {
   dataKind = 'ensemble';
   seriesLabel = 'a recorded real forecast for Berlin from 4 weather models (1 Oct 2026)';
 }
+// ---------- examples from other domains ----------
+// The engine is domain-neutral: an example is just a plan and a table of readings (see examples/).
+let example = null;       // the chosen non-weather example, or null for the weather demo
+let exampleIndex = [];
+async function loadExampleIndex() {
+  exampleIndex = window.WINT_EXAMPLES ? window.WINT_EXAMPLES.index : JSON.parse(await fetchText('examples/index.json', 'the examples list'));
+  for (const e of exampleIndex) $('example').append(el('option', { value: e.id, textContent: e.title }));
+}
+async function exampleFiles(id) {
+  if (window.WINT_EXAMPLES) return window.WINT_EXAMPLES.files[id];
+  const [plan, csv] = await Promise.all([fetchText(`examples/${id}/plan.json`, 'the example plan'), fetchText(`examples/${id}/series.csv`, 'the example data')]);
+  return { plan, csv };
+}
+/** Shows the controls that belong to the chosen domain; weather-only controls disappear for examples. */
+function setDomainUi() {
+  const weather = !example;
+  document.querySelectorAll('[data-weather]').forEach((node) => {
+    node.hidden = !weather || (!!window.WINT_EMBED && node.hasAttribute('data-live'));
+  });
+  $('example-desc').hidden = weather;
+  $('example-desc').textContent = example?.description ?? '';
+  $('run-example').hidden = weather;
+  // Daylight and night come from forecast data (is_day); other data has no sun.
+  for (const option of $('tod').options) option.disabled = !weather && (option.value === 'day' || option.value === 'night');
+}
+async function chooseExample() {
+  const id = $('example').value;
+  example = null;
+  if (id !== 'weather') {
+    const meta = exampleIndex.find((e) => e.id === id);
+    const files = await exampleFiles(id);
+    example = { ...meta, plan: JSON.parse(files.plan), csv: files.csv };
+  }
+  $('tod').value = 'any';
+  $('days-of-week').value = 'all';
+  setDomainUi();
+  retune();
+  if (!example) { ensembleJson = null; series = null; $('results').hidden = true; status('Ready.'); return; }
+  series = wint.parseCsv(example.csv);
+  ensembleJson = null;
+  dataKind = 'single';
+  seriesLabel = `the “${example.title}” example`;
+  run();
+}
 async function loadCsv(file) {
   series = wint.parseCsv(await file.text());
   ensembleJson = null;
@@ -194,6 +238,8 @@ const toClock = (value) => (value === '00:00' ? '24:00' : value); // "until midn
 /** Applies the time-of-day control to a plan object (daylight/night via is_day, or a clock window). */
 function applyTimeOfDay(plan) {
   const mode = $('tod').value;
+  // An example plan keeps the schedule it was written with until the user changes a control.
+  if (example && mode === 'any' && $('days-of-week').value === 'all') return plan;
   for (const stage of plan.stages) {
     delete stage.schedule;
     stage.constraints = stage.constraints.filter((c) => !(c.type === 'hard' && c.metric === 'is_day'));
@@ -222,8 +268,8 @@ const PAINT_DESC = 'Paint (your operation length), then let it cure for 4 to 12 
 function refreshPlan() {
   const hours = parseFloat($('hours').value);
   const paint = $('preset').value === PAINT;
-  const plan = applyTimeOfDay(paint ? paintPlan(hours) : JSON.parse(wint.presetPlan($('preset').value, hours)));
-  $('plan').value = JSON.stringify(plan, null, 2);
+  const base = example ? structuredClone(example.plan) : paint ? paintPlan(hours) : JSON.parse(wint.presetPlan($('preset').value, hours));
+  $('plan').value = JSON.stringify(applyTimeOfDay(base), null, 2);
   $('preset-desc').textContent = paint ? PAINT_DESC : presets.find((p) => p.name === $('preset').value)?.description ?? '';
 }
 /** Re-applies the time-of-day control to the plan as currently edited, keeping manual edits. */
@@ -231,6 +277,7 @@ function retune() {
   const custom = $('tod').value === 'custom';
   $('tod-from-l').hidden = !custom;
   $('tod-to-l').hidden = !custom;
+  if (example && $('tod').value === 'any' && $('days-of-week').value === 'all') return refreshPlan(); // back to the example's own plan
   let plan;
   try { plan = JSON.parse($('plan').value); } catch { return refreshPlan(); }
   if (!Array.isArray(plan.stages)) return refreshPlan();
@@ -827,6 +874,10 @@ async function main() {
     $('units').append(el('li', { textContent: `${m.name}: ${m.unit}` }));
   }
   refreshPlan();
+  try { await loadExampleIndex(); } catch { /* the weather demo works without the examples list */ }
+  setDomainUi();
+  $('example').addEventListener('change', () => guarded(null, chooseExample));
+  $('run-example').addEventListener('click', () => guarded(null, chooseExample));
   // Changing the activity or the length updates the plan and, when data is loaded, the answer.
   for (const id of ['preset', 'hours']) {
     $(id).addEventListener('change', () => guarded(null, async () => { refreshPlan(); if (hasData()) run(); }));

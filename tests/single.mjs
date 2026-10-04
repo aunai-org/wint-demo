@@ -40,6 +40,13 @@ assert.equal(await page.isVisible('#agree'), true);
 assert.equal((await page.$$('#chart polygon.spread')).length >= 5, true);
 assert.match(await page.textContent('#readout'), /Fits in 2 of 2 forecast versions that can answer/);
 
+// Examples from other domains are inlined too, so they work with no network at all.
+await page.selectOption('#example', 'bakery-batch');
+await page.waitForFunction(() => /^6 of 45 possible start times fit/.test(document.getElementById('summary').textContent));
+assert.match(await page.textContent('#best li .hint'), /wait 2 h/);
+assert.equal(await page.isVisible('#preset'), false);
+await page.selectOption('#example', 'weather');
+
 // Explicit theme override wins over the system preference, in both directions.
 const bg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
 await page.emulateMedia({ colorScheme: 'light' });

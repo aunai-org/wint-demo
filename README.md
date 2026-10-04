@@ -2,6 +2,8 @@
 
 A browser demo for [wint](https://github.com/aunai-org/wint), the deterministic environmental operability engine. Pick a place and an activity; it finds the time windows that stay inside your limits and shows the evidence for each decision.
 
+**The default example is weather, but the engine is not about weather.** wint is domain-neutral: it takes a table of timestamps and named numbers plus a plan of limits on those names, and a CPU load, an electricity price or an oven flag work exactly like a wind speed. Weather is the first use case, so the demo opens on a weather forecast (place search, live forecasts, presets). The **Example** menu at the top switches to other domains, with their own data and plan: a server deploy window, EV charging, and a bakery batch with a proofing wait. They live in [`examples/`](examples) (copied from wint with `scripts/sync-examples.sh`), and wint's [examples page](https://github.com/aunai-org/wint/blob/master/docs/EXAMPLES.md) explains what "domain-neutral" means and how to bring your own data. Upload CSV works for any domain too: load your readings, then write your plan in the editor.
+
 There is no backend and no build step. The engine runs in your browser as WebAssembly, and forecasts come straight from [Open-Meteo](https://open-meteo.com/).
 
 ## Run it
@@ -22,6 +24,7 @@ Try **Use synthetic sample data** first: it needs no network. **Find windows (li
 - **Readout.** For the selected start time: "fits in k of n forecast versions that can answer", what blocked the others, which versions could not say and why, and a per-version verdict table. The wording never shows a percentage chance.
 - **Agreement needed.** With several versions, choose how much agreement a window needs: every version that can answer, at least 80%, or at least half.
 - **Missing-metric banner.** If a rule needs a metric that no version provides (the ensemble service has no visibility, for example), the demo names it and says no window can meet the requirement while that rule applies.
+- **Example menu.** Weather forecast (the default) or a non-weather example. An example loads its own data and plan, hides the weather-only controls (place, forecast source, activity, operation length, sample and recorded buttons) and disables the daylight and night options, which need sun data. Time of day and Days still work and override the example's own schedule until set back. The same display rules apply to every domain.
 - **Time of day.** Any time, daylight only, night only, or custom hours (including overnight such as 20:00 to 06:00), on the place's own clock. Times are shown in the place's local time by default, or your time zone, or UTC.
 - **Days.** Every day, weekdays (Mon-Fri) or weekend (Sat-Sun). The weekday is the local day the window starts on, so an overnight window belongs to the evening it begins. A rejected start explains itself with the weekday and the allowed days.
 - **A plan with a wait.** The activity list ends with a demo-only "paint a fence (with a wait)": paint, a 4 to 12 hour cure that is not checked, then a clear coat. It shows how the engine places the second stage in the best allowed slot; each best window lists the wait it chose.
@@ -107,7 +110,7 @@ npm run serve &      # in another terminal, or in the background
 npm test             # drives the page in headless Chromium using the synthetic sample
 ```
 
-`npm test` (two suites) covers loading, results, the rail and chart (including a check that the chart's red markers agree with the engine's rejections), time-of-day modes, weekdays, the plan with a wait, the place clock, plan editing, CSV upload, graceful network failures and the mobile layout, using the synthetic sample and mocked API errors. The second suite covers several forecast versions: agreement colors, the per-version verdicts, the requirement control, the missing-metric banner, time of day across versions and live fetching with mocked responses. `npm run test:single` builds the single-file page and checks it under a strict no-network CSP (with WASM allowed), including the light/dark theme switch.
+`npm test` (two suites) covers loading, results, the rail and chart (including a check that the chart's red markers agree with the engine's rejections), time-of-day modes, weekdays, the plan with a wait, the non-weather examples, the place clock, plan editing, CSV upload, graceful network failures and the mobile layout, using the synthetic sample and mocked API errors. The second suite covers several forecast versions: agreement colors, the per-version verdicts, the requirement control, the missing-metric banner, time of day across versions and live fetching with mocked responses. `npm run test:single` builds the single-file page and checks it under a strict no-network CSP (with WASM allowed), including the light/dark theme switch.
 
 ## Caveats
 

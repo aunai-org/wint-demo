@@ -32,7 +32,15 @@ JSON.parse(sample); // fail the build on a corrupt sample
 const sampleMulti = read('sample-multi-model.json').trim();
 JSON.parse(sampleMulti);
 
+// Examples from other domains: the index plus each example's plan and data, inlined.
+const exampleIndex = JSON.parse(read('examples/index.json'));
+const exampleFiles = Object.fromEntries(exampleIndex.map((e) => {
+  JSON.parse(read(`examples/${e.id}/plan.json`));
+  return [e.id, { plan: read(`examples/${e.id}/plan.json`), csv: read(`examples/${e.id}/series.csv`) }];
+}));
+
 const script = `window.WINT_EMBED = true;
+window.WINT_EXAMPLES = ${JSON.stringify({ index: exampleIndex, files: exampleFiles })};
 window.WINT_WASM_B64 = ${JSON.stringify(wasmB64)};
 window.WINT_SAMPLE = ${JSON.stringify(sample)};
 window.WINT_SAMPLE_MULTI = ${JSON.stringify(sampleMulti)};

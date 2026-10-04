@@ -8,5 +8,6 @@ rm -rf "$OUT"
 mkdir -p "$OUT/vendor"
 cp index.html app.js style.css sample-forecast.json sample-multi-model.json LICENSE "$OUT/"
 cp vendor/wint.js vendor/wint_bg.wasm "$OUT/vendor/"
+cp -r examples "$OUT/examples"
 touch "$OUT/.nojekyll"
 echo "built $OUT:" && find "$OUT" -type f | sort

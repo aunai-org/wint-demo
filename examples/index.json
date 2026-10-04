@@ -1,0 +1,17 @@
+[
+  {
+    "id": "server-deploy",
+    "title": "Server deploy window",
+    "description": "Deploy for 2 hours, only overnight (20:00 to 06:00), when CPU load is under 60 and the job queue is at most 20; prefer the quietest hour. Data: cpu_load and queue_depth every hour for 3 days."
+  },
+  {
+    "id": "ev-charging",
+    "title": "EV charging",
+    "description": "Charge for 4 hours while plugged in (18:00 to 08:00), only when the grid is at most 300 g CO2/kWh; prefer the cheapest power. Data: electricity price and grid carbon intensity every hour for 2 days."
+  },
+  {
+    "id": "bakery-batch",
+    "title": "Bakery batch with a proofing wait",
+    "description": "Mix for 1 hour (05:00 to 13:00, dry room), proof for 2 to 4 hours (not checked), then bake for 1 hour when the oven is free; prefer cheap power. Data: room humidity, an oven_free flag (1 or 0) and power price every hour for 2 days."
+  }
+]

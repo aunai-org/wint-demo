@@ -199,6 +199,39 @@ assert.equal(await page.$$eval('#chart .band.wait', (r) => r.length), panels);
 await page.selectOption('#preset', 'drone');
 await page.waitForFunction(() => !/"gap"/.test(document.getElementById('plan').value));
 
+// ---- Examples from other domains: the same engine on non-weather data ----
+assert.deepEqual(await page.$$eval('#example option', (o) => o.map((x) => x.value)), ['weather', 'server-deploy', 'ev-charging', 'bakery-batch']);
+await page.selectOption('#tz', 'utc');
+await page.selectOption('#example', 'server-deploy');
+await summaryMatches(/26 of 71 possible start times fit all your limits\. Data: the “Server deploy window” example/);
+assert.ok(!(await page.isVisible('#place')) && !(await page.isVisible('#preset')) && !(await page.isVisible('#run-live')), 'weather-only controls are hidden');
+assert.match(await text('#example-desc'), /only overnight/);
+assert.match(await page.inputValue('#plan'), /"schedule"[\s\S]*"cpu_load"/);
+okHours = await cellHours('ok');
+assert.ok(okHours.length === 26 && okHours.every((h) => h >= 20 || h <= 4), `server ok hours ${[...new Set(okHours)]}`);
+assert.equal(await page.$eval('#tod option[value="day"]', (o) => o.disabled), true, 'daylight needs sun data');
+// A control overrides the example's own schedule; putting it back restores the example.
+await page.selectOption('#days-of-week', 'weekend');
+await page.waitForFunction(() => /"sat"/.test(document.getElementById('plan').value));
+assert.equal(await page.$$eval('#strip .cell.ok', (c) => c.length), 0, 'the data is Mon-Wed, so a weekend rule leaves nothing');
+await page.selectOption('#days-of-week', 'all');
+await page.waitForFunction(() => /"from": "20:00"/.test(document.getElementById('plan').value));
+assert.equal(await page.$$eval('#strip .cell.ok', (c) => c.length), 26);
+// A plan with a wait, on yet another kind of data.
+await page.selectOption('#example', 'bakery-batch');
+await summaryMatches(/6 of 45 possible start times/);
+assert.match(await text('#best li .hint'), /mix: 10:00.*wait 2 h · bake: 13:00/);
+await page.selectOption('#example', 'ev-charging');
+await summaryMatches(/12 of 45 possible start times/);
+// Back to weather: the weather controls return and the example data is gone.
+await page.selectOption('#example', 'weather');
+await page.waitForSelector('#preset', { state: 'visible' });
+assert.ok(await page.isHidden('#results'));
+assert.equal(await page.isHidden('#example-desc'), true);
+await page.selectOption('#preset', 'drone');
+await page.click('#run-sample');
+await summaryMatches(/synthetic sample/);
+
 // ---- Plan editing ----
 await page.click('#plan-panel > summary');
 const plan = JSON.parse(await page.inputValue('#plan'));

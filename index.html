@@ -10,7 +10,7 @@
 <body>
   <header>
     <h1>wint <span>demo</span></h1>
-    <p>When can you do it, for how long, and why? Pick a place and an activity; wint finds the time windows that stay inside your limits and shows its evidence. Everything runs in your browser.</p>
+    <p>When can you do it, for how long, and why? Give wint a plan of limits and a table of readings; it finds the time windows that stay inside your limits and shows its evidence. The first example uses weather forecasts; the Example menu shows the same engine on other kinds of data. Everything runs in your browser.</p>
   </header>
 
   <main>
@@ -18,27 +18,33 @@
       <h2 id="setup-h">1. Where and what</h2>
       <p id="embed-note" class="note" hidden>This copy runs in a sandbox that cannot reach forecast services, so it works on synthetic sample data, a recorded real forecast, or your own CSV. The <a href="https://github.com/aunai-org/wint-demo">standalone demo</a> adds live forecasts and place search.</p>
       <div class="grid">
-        <label class="wide" data-live>Place
+        <label class="wide">Example
+          <select id="example">
+            <option value="weather">Weather forecast (live forecast, sample or recorded data)</option>
+          </select>
+        </label>
+        <p id="example-desc" class="wide hint" hidden></p>
+        <label class="wide" data-live data-weather>Place
           <span class="row">
             <input id="place" type="search" placeholder="e.g. Berlin" autocomplete="off">
             <button id="search-place" type="button" class="secondary">Search</button>
           </span>
         </label>
         <div id="place-results" class="wide results-list" hidden></div>
-        <label data-live>Latitude <input id="lat" type="number" step="any" min="-90" max="90" value="52.52"></label>
-        <label data-live>Longitude <input id="lon" type="number" step="any" min="-180" max="180" value="13.41"></label>
-        <label data-live>Forecast days <input id="days" type="number" min="1" max="16" value="3"></label>
-        <label data-live>Forecast source
+        <label data-live data-weather>Latitude <input id="lat" type="number" step="any" min="-90" max="90" value="52.52"></label>
+        <label data-live data-weather>Longitude <input id="lon" type="number" step="any" min="-180" max="180" value="13.41"></label>
+        <label data-live data-weather>Forecast days <input id="days" type="number" min="1" max="16" value="3"></label>
+        <label data-live data-weather>Forecast source
           <select id="source">
             <option value="single">One forecast</option>
             <option value="models">Compare 4 weather models</option>
             <option value="ensemble">Ensemble (about 40 members)</option>
           </select>
         </label>
-        <label>Activity
+        <label data-weather>Activity
           <select id="preset"></select>
         </label>
-        <label>Operation length (hours) <input id="hours" type="number" min="1" step="1" value="2"></label>
+        <label data-weather>Operation length (hours) <input id="hours" type="number" min="1" step="1" value="2"></label>
         <label>Time of day
           <select id="tod">
             <option value="any">Any time</option>
@@ -71,11 +77,12 @@
           </select>
         </label>
       </div>
-      <p id="preset-desc" class="hint"></p>
+      <p id="preset-desc" class="hint" data-weather></p>
       <div class="row actions">
-        <button id="run-live" type="button" data-live>Find windows (live forecast)</button>
-        <button id="run-sample" type="button" class="secondary">Use synthetic sample data</button>
-        <button id="run-recorded" type="button" class="secondary">Use a recorded real forecast (4 models)</button>
+        <button id="run-live" type="button" data-live data-weather>Find windows (live forecast)</button>
+        <button id="run-sample" type="button" class="secondary" data-weather>Use synthetic sample data</button>
+        <button id="run-recorded" type="button" class="secondary" data-weather>Use a recorded real forecast (4 models)</button>
+        <button id="run-example" type="button" hidden>Run this example again</button>
         <label class="file secondary">Upload CSV<input id="csv" type="file" accept=".csv,text/csv"></label>
       </div>
       <p id="status" role="status" aria-live="polite"></p>
