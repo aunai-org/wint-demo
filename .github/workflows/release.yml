@@ -1,0 +1,36 @@
+name: Release
+# When you push a version tag (for example v0.1.1), runs the tests once more and creates a
+# GitHub Release with the single-file demo page attached. The live site itself is deployed
+# by pages.yml whenever main changes, so nothing is published to a registry here.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # create the GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: The commit is on main
+        run: |
+          if ! git branch -r --contains "$GITHUB_SHA" | grep -q 'origin/main$'; then
+            echo "Commit $GITHUB_SHA is not on main; merge it before tagging" >&2
+            exit 1
+          fi
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - run: python3 -m http.server 8765 &
+      - run: sleep 1 && npm test
+      - run: npm run test:single
+      - name: Create the GitHub Release
+        run: gh release create "$GITHUB_REF_NAME" dist/wint-demo.html --generate-notes --verify-tag --title "wint demo ${GITHUB_REF_NAME#v}"
+        env:
+          GH_TOKEN: ${{ github.token }}
