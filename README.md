@@ -1,5 +1,9 @@
 # wint-demo
 
+[![CI](https://github.com/aunai-org/wint-demo/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/aunai-org/wint-demo/actions/workflows/ci.yml)
+
+**Live demo: <https://aunai-org.github.io/wint-demo/>**
+
 A browser demo for [wint](https://github.com/aunai-org/wint), which finds the time windows when a job can run within the limits you set and explains every decision. Pick a place and an activity (or another example); it finds the time windows that stay inside your limits and shows the evidence for each decision.
 
 The demo opens on a weather forecast. The **Example** menu at the top switches to other data: a server deploy window, EV charging, and a bakery batch with a proofing wait. They live in [`examples/`](examples) (copied from wint with `scripts/sync-examples.sh`) and are explained on wint's [examples page](https://github.com/aunai-org/wint/blob/master/docs/EXAMPLES.md). Upload CSV works too: load your readings, then write your plan in the editor.
